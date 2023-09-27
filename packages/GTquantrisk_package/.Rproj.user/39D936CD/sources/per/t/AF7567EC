@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1580203659943.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "60546918",
+    "id" : "AF7567EC",
+    "lastKnownWriteTime" : 1579797869,
+    "last_content_update" : 1579797869,
+    "path" : "//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/r-scripts/Thomas Smyth Code/Init.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "30,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

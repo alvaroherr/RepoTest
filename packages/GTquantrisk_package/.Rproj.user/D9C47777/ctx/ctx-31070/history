@@ -1,0 +1,512 @@
+# 80% of values are used as training data
+# The remaining 20% are used as test data
+N1 <- nrow(eighty)
+indtrain1 <- sample(1:N1,size=0.8*N1)
+indtrain1 <- sort(indtrain1)
+indtest1 <- setdiff(1:N1,indtrain1)
+# Look at the results for the training data only
+tab2 <- table(eighty$Default_Binary[indtrain1])
+res[iter,1] <- tab2[2]
+res[iter,2] <- tab2[1]
+res[iter,3] <- tab2[2]/sum(tab2)
+#test set
+tab3 <- table(eighty$Default_Binary[indtest1])
+res[iter,4] <- tab3[2]
+res[iter,5] <- tab3[1]
+res[iter,6] <- tab3[2]/sum(tab3)
+} # iter
+# Check out the default rate summary statistics.
+colnames(res)<-c("Default Train", "NonDefault Train", "Probability Default Train", "Default Test", "NonDefault Test", "Probability Default Test")
+apply(res,2,summary)
+####Logistic Regression ###
+#main process
+mod <- Logistic_Regression(ES_NEW, formula="~.", Train_set=0.8)
+#see if interaction terms should be included
+mod.int <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR+CCL:BCU, family = binomial, data = mod$Train_Set)
+mod.train <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR, family = binomial, data = mod$Train_Set)
+mod.test <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR, family = binomial, data = mod$Test_Set)
+###Variable Importance ###
+varImp(mod.train)
+varImp(mod.int)
+varImp(mod.test)
+###LR TEST ###
+lrtest(mod$Null_Model, mod$Type_Model)
+lrtest(mod$Full_Model, mod$Type_Model)
+lrtest(mod$Type_Model, mod.int)
+####Predicting using Logistic Regression ###
+pd <- predict(mod.train, mod$Train_Set, type="response")
+pd
+mod.train
+mod$Train_Set
+predict(mod.test, mod$Test_Set, type="response")
+mod$Train_Set$pd <- pd
+View(mod.train)
+View(mod)
+mean(pd)
+mean(ES_NEW$Default_Binary)
+mean(pd.test)
+pd.test <- predict(mod.test, mod$Test_Set, type="response")
+mod$Test_Set$pd.test <- pd.test
+mean(pd.test)
+###Benchmarking ###
+prosper <- read.csv("prosper_withdefault.csv", header = TRUE)
+mod$Train_Set$ps <- prosper[indtrain,]$ProsperScore
+prosper[indtrain,]$ProsperScore
+prosper_score_tab <- table(mod$Train_Set$ps)
+dataframeps <- data.frame(PD = mod$Train_Set$pd, PS = mod$Train_Set$ps, Default = as.numeric(mod$Train_Set$Default_Binary))
+View(dataframeps)
+G <- dataframeps %>%
+group_by(PS) %>%
+summarise(n=n(), Average_Actual_PD = mean(Default), Average_Predicted_PD=mean(PD), NumberofDefaultsProsper = sum(Default), NumberofDefaultsOurModel = sum(PD))
+View(G)
+G <- data.frame(G)
+# make the plot
+plot <- ggplot(G, aes(PS))+geom_line(aes(y= Average_Predicted_PD, colour="Average_PS"))+geom_line(aes(y=Average_Actual_PD, colour="Average_PD"))+theme_minimal()+ xlab("Prosper Score")
+plot+scale_y_continuous("Probability of Default", limits = c(0.02, 0.07))
+View(G)
+####Performance Measures ###
+###residuals###
+stdres <- rstandard(mod.test)
+rstandard(mod.test)
+plot(mod$Test_Set$pd.test, stdres, ylab="Standardized Residuals", xlab="Predictions", main="Probability of Default on Test Set")
+abline(0, 0)
+###ROC and AUC ###
+pred<-prediction(pd,mod$Train_Set$Default_Binary)
+pred_test<-prediction(pd.test,mod$Test_Set$Default_Binary)
+perf <- performance(pred,"tpr","fpr")
+perf_test <- performance(pred_test,"tpr","fpr")
+(auc <- performance(pred, measure="auc"))
+(auc_test <- performance(pred_test, measure="auc"))
+ModelMetrics::gini(mod.train)
+ModelMetrics::gini(mod.test)
+plot(perf,
+main="ROC Curve",
+col="red")
+plot(perf_test, col="blue", add=TRUE)
+legend("topleft",
+c("Training", "Test"),
+fill=c("red", "blue")
+)
+abline(a = 0, b = 1)
+###Gini ##
+fmcont <- select_if(Data_B, is.numeric)
+drops.d <- c("X", "X.1", "X.2", "PublicRecordsLast12Months", "Default_Binary" )
+fmcont<- fmcont[!names(fmcont)%in% drops.d]
+fmcont$Default <- Data_B$Default_Binary
+res3<-matrix(NA,9,2)
+res3[1,1] <- reldist::gini(fmcont$LoanMonthsSinceOrigination)
+res3[2,1] <- reldist::gini(na.omit(fmcont$EstimatedReturn))
+res3[3,1] <- reldist::gini(na.omit(fmcont$TradesOpenedLast6Months))
+res3[4,1] <- reldist::gini(na.omit(fmcont$AvailableBankcardCredit))
+res3[5,1] <- reldist::gini(na.omit(fmcont$BankcardUtilization))
+res3[6,1] <- reldist::gini(na.omit(fmcont$RevolvingCreditBalance))
+res3[7,1] <- reldist::gini(na.omit(fmcont$CurrentCreditLines))
+res3[8,1] <- reldist::gini(na.omit(fmcont$TotalInquiries))
+res3[9,1] <- reldist::gini(na.omit(fmcont$DebtToIncomeRatio))
+for (iter in 1:9)
+{
+res3[iter,2] <- names(fmcont)[iter]
+}
+gini <- data.frame(res3[,1], res3[,2])
+colnames(gini) <- c("Gini", "Variable")
+res2<-matrix(NA,100,2)
+iterlim <- 100
+for (iter in 1:iterlim)
+{
+# Split the data
+# 80% of values are used as training data
+# The remaining 20% are used as test data
+N1 <- nrow(eighty)
+indtrain1 <- sample(1:N1,size=0.8*N1)
+indtrain1 <- sort(indtrain1)
+indtest1 <- setdiff(1:N1,indtrain1)
+# Look at the forward regression for the training data only
+fit.forward.train <- glm(formula = Default_Binary ~ TOL6M + LC + TI + DIR + IR + ES_NEW +  BCU + CCL + ABCC + RCB, family = binomial, data = ES_NEW,
+subset = indtrain1)
+res2[iter,1]<- ModelMetrics::gini(fit.forward.train)
+#test set
+fit.forward.test1 <- glm(formula = Default_Binary ~ TOL6M + LC + TI + DIR + IR + ES_NEW +  BCU + CCL + ABCC + RCB, family = binomial, data = ES_NEW,
+subset = indtest1)
+res2[iter,2] <- ModelMetrics::gini(fit.forward.test1)
+} # iter.
+colnames(res2)<-c("Gini Training", "Gini Test")
+apply(res2,2,summary)
+###Scorecard ###
+score <- Scores(mod$Train_Set, PD=pd)
+ggplot(score,aes = score$Score) +
+geom_histogram(mapping = aes(x=score$Score, fill=score$Default_Binary),
+bins = 100) +labs(x = "Score", y = "Count", title = "Training Set Score Distribution")
+ggplot(score,aes = score$Score) +
+geom_histogram(mapping = aes(x=score$Score, fill=score$Default_Binary),
+bins = 100) +labs(x = "Score", y = "Count", title = "Training Set Score Distribution")
+score <- Scores(mod$Test_Set, PD=pd.test)
+ggplot(score,aes = score$Score) +
+geom_histogram(mapping = aes(x=score$Score, fill=score$Default_Binary),
+bins = 100) +labs(x = "Score", y = "Count", title = "Test Set Score Distribution")
+View(G)
+prosper_score_tab
+# make the plot
+plot <- ggplot(G, aes(PS))+geom_line(aes(y= Average_Predicted_PD, colour="Average_PS"))+geom_line(aes(y=Average_Actual_PD, colour="Average_PD"))+theme_minimal()+ xlab("Prosper Score")
+plot+scale_y_continuous("Probability of Default", limits = c(0.02, 0.07))
+plot(mod$Test_Set$pd.test, stdres, ylab="Standardized Residuals", xlab="Predictions", main="Probability of Default on Test Set")
+abline(0, 0)
+rstandard(mod.test)
+?rstandard
+mod <- Logistic_Regression(ES_NEW, formula="~.", Train_set=0.8)
+#see if interaction terms should be included
+mod.int <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR+CCL:BCU, family = binomial, data = mod$Train_Set)
+mod.train <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR, family = binomial, data = mod$Train_Set)
+mod.test <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR, family = binomial, data = mod$Test_Set)
+rstandard(mod.test)
+mod$Test_Set$pd.test
+mod$Test_Set$pd.test <- pd.test
+pd.test
+mod$Test_Set$pd.test
+pd.test
+?prediction
+pred<-prediction(pd,mod$Train_Set$Default_Binary)
+pred_test<-prediction(pd.test,mod$Test_Set$Default_Binary)
+perf <- performance(pred,"tpr","fpr")
+perf_test <- performance(pred_test,"tpr","fpr")
+# Plot the ROC curve.
+(auc <- performance(pred, measure="auc"))
+(auc_test <- performance(pred_test, measure="auc"))
+ModelMetrics::gini(mod.train)
+ModelMetrics::gini(mod.test)
+plot(perf,
+main="ROC Curve",
+col="red")
+plot(perf_test, col="blue", add=TRUE)
+legend("topleft",
+c("Training", "Test"),
+fill=c("red", "blue")
+)
+abline(a = 0, b = 1)
+library(binaryLogic)
+library(ModelMetrics)
+library(ROCR)
+library(pROC)
+library(reldist)
+library(lmtest)
+library(dplyr)
+library(caret)
+library(SIP2019)
+setwd("//fs02/RAS/Quantitative Risk/Summer Interns/Data")
+Data_B <- read.csv("Data_B", header=TRUE)
+ES_NEW <- read.csv("ES_NEW", header=TRUE)
+drops.er <- c("ER", "LMO", "X")
+ES_NEW <- ES_NEW[!names(ES_NEW)%in% drops.er]
+###sampling ###
+N <- nrow(ES_NEW)
+indtrain <- sample(1:N,size=0.8*N)
+indtrain <- sort(indtrain)
+indtest <- setdiff(1:N,indtrain)
+eighty <- ES_NEW[indtrain,] #our training set of 80% of the data
+(tab <- table(ES_NEW$Default_Binary)) #table of default, non-default for training
+(tab <- table(ES_NEW[indtest,]$Default_Binary)) #table of default, non-default
+prop.test(tab[2], sum(tab), p=0.046, conf.level=0.95) #proportion testing
+#checking we have a representative default rate over multiple data sets
+res<-matrix(NA,100,6)
+iterlim <- 100
+for (iter in 1:iterlim)
+{
+# Split the data from the above training set so as not to touch any of the test set
+# 80% of values are used as training data
+# The remaining 20% are used as test data
+N1 <- nrow(eighty)
+indtrain1 <- sample(1:N1,size=0.8*N1)
+indtrain1 <- sort(indtrain1)
+indtest1 <- setdiff(1:N1,indtrain1)
+# Look at the results for the training data only
+tab2 <- table(eighty$Default_Binary[indtrain1])
+res[iter,1] <- tab2[2]
+res[iter,2] <- tab2[1]
+res[iter,3] <- tab2[2]/sum(tab2)
+#test set
+tab3 <- table(eighty$Default_Binary[indtest1])
+res[iter,4] <- tab3[2]
+res[iter,5] <- tab3[1]
+res[iter,6] <- tab3[2]/sum(tab3)
+} # iter
+# Check out the default rate summary statistics.
+colnames(res)<-c("Default Train", "NonDefault Train", "Probability Default Train", "Default Test", "NonDefault Test", "Probability Default Test")
+apply(res,2,summary)
+####Logistic Regression ###
+#main process
+mod <- Logistic_Regression(ES_NEW, formula="~.", Train_set=0.8)
+#see if interaction terms should be included
+mod.int <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR+CCL:BCU, family = binomial, data = mod$Train_Set)
+mod.train <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR, family = binomial, data = mod$Train_Set)
+mod.test <- glm(formula = Default_Binary ~ES_NEW+TI + LC + BCU + TOL6M + BCU+
+RCB + CCL + ABCC +IR+ DIR, family = binomial, data = mod$Test_Set)
+###Variable Importance ###
+varImp(mod.train)
+varImp(mod.int)
+varImp(mod.test)
+###LR TEST ###
+lrtest(mod$Null_Model, mod$Type_Model)
+lrtest(mod$Full_Model, mod$Type_Model)
+lrtest(mod$Type_Model, mod.int)
+####Predicting using Logistic Regression ###
+pd <- predict(mod.train, mod$Train_Set, type="response")
+pd.test <- predict(mod.test, mod$Test_Set, type="response")
+mod$Train_Set$pd <- pd
+mod$Test_Set$pd.test <- pd.test
+mean(pd)
+mean(ES_NEW$Default_Binary)
+mean(pd.test)
+###Benchmarking ###
+prosper <- read.csv("prosper_withdefault.csv", header = TRUE)
+mod$Train_Set$ps <- prosper[indtrain,]$ProsperScore
+prosper_score_tab <- table(mod$Train_Set$ps)
+dataframeps <- data.frame(PD = mod$Train_Set$pd, PS = mod$Train_Set$ps, Default = as.numeric(mod$Train_Set$Default_Binary))
+G <- dataframeps %>%
+group_by(PS) %>%
+summarise(n=n(), Average_Actual_PD = mean(Default), Average_Predicted_PD=mean(PD), NumberofDefaultsProsper = sum(Default), NumberofDefaultsOurModel = sum(PD))
+G <- data.frame(G)
+# make the plot
+plot <- ggplot(G, aes(PS))+geom_line(aes(y= Average_Predicted_PD, colour="Average_PS"))+geom_line(aes(y=Average_Actual_PD, colour="Average_PD"))+theme_minimal()+ xlab("Prosper Score")
+plot+scale_y_continuous("Probability of Default", limits = c(0.02, 0.07))
+####Performance Measures ###
+###residuals###
+stdres <- rstandard(mod.test)
+plot(mod$Test_Set$pd.test, stdres, ylab="Standardized Residuals", xlab="Predictions", main="Probability of Default on Test Set")
+abline(0, 0)
+###ROC and AUC ###
+pred<-prediction(pd,mod$Train_Set$Default_Binary)
+pred_test<-prediction(pd.test,mod$Test_Set$Default_Binary)
+perf <- performance(pred,"tpr","fpr")
+perf_test <- performance(pred_test,"tpr","fpr")
+# Plot the ROC curve.
+(auc <- performance(pred, measure="auc"))
+(auc_test <- performance(pred_test, measure="auc"))
+ModelMetrics::gini(mod.train)
+ModelMetrics::gini(mod.test)
+plot(perf,
+main="ROC Curve",
+col="red")
+plot(perf_test, col="blue", add=TRUE)
+legend("topleft",
+c("Training", "Test"),
+fill=c("red", "blue")
+)
+abline(a = 0, b = 1)
+?prediction
+summary(mod.train)
+summary(mod.test)
+auc
+uc_test
+auc_test
+library(test)
+library(janitor)
+library(dlookr)
+library(readxl)
+library(shiny)
+library(DT)
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+library(shinydashboard)
+library(shinyjs)
+library(RColorBrewer)
+library(dlookr)
+library(corrplot)
+library(lessR)
+library(plotly)
+library(skimr)
+library(naniar)
+library(visdat)
+library(purrr)
+library(rvest)
+library(StatMeasures)
+library(na.tools)
+library(lubridate)
+library(shinymanager)
+library(shinyauthr)
+library(sodium)
+library(ggjoy)
+library(readr)
+################################
+initial_data <- read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/docs/initial_data.csv",
+col_types = cols(X1 = col_skip()))
+step_1 <- f_standard_clean_final(data = initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3)
+step_6 <- f_reshape(step_5)
+step_5a <- left_join(step_5,industry,by=c("symbol"))
+step_6a <- melt(step_5a, id.vars = c("symbol","date","sector")) %>%
+filter(variable != "industry")
+step_6a$variable <- as.character(step_6a$variable)
+step_6a <- step_6a %>%
+left_join(step_6[,c(1,2,3,5)], by = c("symbol" = "symbol", "date" = "date", "variable" = "variable"))
+step_6a$date <- as.Date(step_6a$date, "%Y-%m-%d")
+step_6a$value <- as.numeric(step_6a$value)
+ui <- f_ui_build(step_5a)
+server <- f_server_build(def_table = t_definitions, final_table = step_6a, joined_table = step_5a)
+shinyApp(ui=ui,server=server)
+library(test)
+library(test)
+library(test)
+getwd()
+library(test)
+library(test)
+library(test)
+library(janitor)
+library(dlookr)
+library(readxl)
+library(shiny)
+library(DT)
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+library(shinydashboard)
+library(shinyjs)
+library(RColorBrewer)
+library(dlookr)
+library(corrplot)
+library(lessR)
+library(plotly)
+library(skimr)
+library(naniar)
+library(visdat)
+library(purrr)
+library(rvest)
+library(StatMeasures)
+library(na.tools)
+library(lubridate)
+library(shinymanager)
+library(shinyauthr)
+library(sodium)
+library(ggjoy)
+library(readr)
+################################
+initial_data <- read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/docs/initial_data.csv",
+col_types = cols(X1 = col_skip()))
+step_1 <- f_standard_clean_final(data = initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3)
+step_6 <- f_reshape(step_5)
+step_5a <- left_join(step_5,industry,by=c("symbol"))
+step_6a <- melt(step_5a, id.vars = c("symbol","date","sector")) %>%
+filter(variable != "industry")
+step_6a$variable <- as.character(step_6a$variable)
+step_6a <- step_6a %>%
+left_join(step_6[,c(1,2,3,5)], by = c("symbol" = "symbol", "date" = "date", "variable" = "variable"))
+step_6a$date <- as.Date(step_6a$date, "%Y-%m-%d")
+step_6a$value <- as.numeric(step_6a$value)
+ui <- f_ui_build(step_5a)
+server <- f_server_build(def_table = t_definitions, final_table = step_6a, joined_table = step_5a)
+shinyApp(ui=ui,server=server)
+paste(getwd(), "/test_0.1.0/test/inst/rmarkdown/templates/report_overview-rmd/skeleton/report_overview.Rmd", sep = "")
+library(test)
+library(test)
+initial_data <- read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/docs/initial_data.csv",
+col_types = cols(X1 = col_skip()))
+step_1 <- f_standard_clean_final(data = initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3)
+step_6 <- f_reshape(step_5)
+step_5a <- left_join(step_5,industry,by=c("symbol"))
+step_6a <- melt(step_5a, id.vars = c("symbol","date","sector")) %>%
+filter(variable != "industry")
+step_6a$variable <- as.character(step_6a$variable)
+step_6a <- step_6a %>%
+left_join(step_6[,c(1,2,3,5)], by = c("symbol" = "symbol", "date" = "date", "variable" = "variable"))
+step_6a$date <- as.Date(step_6a$date, "%Y-%m-%d")
+step_6a$value <- as.numeric(step_6a$value)
+ui <- f_ui_build(step_5a)
+server <- f_server_build(def_table = t_definitions, final_table = step_6a, joined_table = step_5a)
+shinyApp(ui=ui,server=server)
+setwd("D:/USERS/dmcdonald/Documents")
+getwd()
+initial_data <- read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/docs/initial_data.csv",
+col_types = cols(X1 = col_skip()))
+step_1 <- f_standard_clean_final(data = initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3)
+step_6 <- f_reshape(step_5)
+step_5a <- left_join(step_5,industry,by=c("symbol"))
+step_6a <- melt(step_5a, id.vars = c("symbol","date","sector")) %>%
+filter(variable != "industry")
+step_6a$variable <- as.character(step_6a$variable)
+step_6a <- step_6a %>%
+left_join(step_6[,c(1,2,3,5)], by = c("symbol" = "symbol", "date" = "date", "variable" = "variable"))
+step_6a$date <- as.Date(step_6a$date, "%Y-%m-%d")
+step_6a$value <- as.numeric(step_6a$value)
+ui <- f_ui_build(step_5a)
+server <- f_server_build(def_table = t_definitions, final_table = step_6a, joined_table = step_5a)
+shinyApp(ui=ui,server=server)
+library(test)
+library(test)
+IV_test_yearly <- function(inputcuts, inputdefault, variable) {
+v_cuts <- as.numeric(inputcuts)
+joined_adw <- inputdefault
+joined_adw <- as.data.frame(joined_adw)
+v_years <- c(unique(as.Date(joined_adw$date)))
+v_years <- sort(v_years, decreasing=F)
+final <- data.frame()
+trend <- c(colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("trend")) == TRUE],
+colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("average")) == TRUE],
+colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("rate")) == TRUE])
+if(variable %in% trend){
+a <-2
+}else{
+a <-1
+}
+for(i in a:length(v_years)) {
+assign(paste("bins", i, sep = "_"), smbinning.custom(joined_adw %>% filter(date == v_years[i]), y = "target",
+x = variable, cuts = as.numeric(v_cuts)))
+bins <- get(paste("bins", i, sep = "_"))
+assign(paste("IV", i, sep = "_"), bins$ivtable)
+IVs <- get(paste("IV", i, sep = "_"))
+IVs <- IVs %>%
+mutate(IV_2 = ifelse(CntGood != 0,IV, round(abs((CntBad/CntBad[Cutpoint == "Total"] - 0.5/CntGood[Cutpoint == "Total"]) *
+(log(( 0.5 / CntGood[Cutpoint == "Total"])/(CntBad/CntBad[Cutpoint == "Total"])))), digits = 4)))
+assign(paste("IV_final", i, sep = "_"), IVs[nrow(IVs), c("Cutpoint", "IV")])
+assign(paste("IV_years", i, sep = "_"), cbind(v_years[i], get(paste("IV_final", i, sep = "_"))))
+final <- rbind(final,get(paste("IV_years", i, sep = "_")))
+}
+return(final)
+}
+train <- read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/Binning Tool/New data/binning_train.csv")
+library(dplyr)
+library(DT)
+library(knitr)
+library(kableExtra)
+library(MASS)
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(lattice)
+library(shiny)
+library(plotly)
+library(smbinning)
+library(shinyWidgets)
+library(readr)
+library(shinydashboard)
+library(shinyjs)
+library(readxl)
+library(test)
+library(smbinning)
+library(plotly)
+library(stringr)
+train <- read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/Binning Tool/New data/binning_train.csv")
+train <- as.data.frame(train)
+train$date <- as.Date(train$date, format = "%d/%m/%Y")
+library(test)

@@ -1,0 +1,118 @@
+---
+title:  WOE Test 
+author:  Quant Risk GT
+date:  "`r format(Sys.time(), '%d %B, %Y')`"
+runtime: shiny
+output: 
+   html_document:
+    css: GTStyle.css
+    fig_caption: true
+    includes:
+      after_body: Footer.html
+---
+<img src="GTLogo.jpg" style="position:absolute;top:0px;right:0px;" width="200px"/>
+
+```{r, echo=FALSE, warning=FALSE, include = FALSE}
+#echo = FALSE hides the R code in the report.
+#Warnig = FALSE doesn't display the warnings in the report.
+#-----------------------------------
+#   GT Themed Colour Palettes 
+#-----------------------------------
+# The GT color template is saved as a vector. The user will have to call the vector in order to fill the graphs in GT colors.
+library(test)
+library(DT)
+library(dplyr)
+library(readr)
+library(smbinning)
+library(shiny)
+library(plotly)
+
+default_with_ratios_23 <- read_csv("D:/USERS/dmcdonald/Documents/default_with_ratios_2.csv")
+
+joined_adw_1 <- default_with_ratios_23
+
+joined_adw_1 <- joined_adw_1[,c(2:46,60,62)]
+
+joined_adw_1 <- joined_adw_1 %>%
+  mutate(default = ifelse(BB_1YR_DEFAULT_PROB >= 0.006,1,0))
+
+joined_adw_1 <- joined_adw_1[,-c(47)]
+
+GT_colors <- c(
+  "red2" ,
+  "turquoise3",
+  "orange",
+  "greenyellow" ,
+  "magenta4" ,
+  "seashell3",  
+  "darkslategrey")
+
+GT_colors_Purple <- c("orchid4", "orchid3", "orchid", "plum", "plum2", "plum3")
+GT_colors_Orange <- c("darkorange1", "orange", "tan1", "salmon1", "lightsalmon1")
+GT_colors_Red <- c("red3", "red2", "orangered1", "indianred2", "mistyrose")
+GT_colors_Blue <- c("turquoise4", "turquoise3", "turquoise2", "darkslategray3", "darkslategray2")
+
+#-----------------------------------------------
+# Graph Formatting
+#----------------------------------------------
+library(ggplot2)
+plot_background <-   theme(strip.background =element_rect(fill="white"))+
+  theme(panel.background = element_rect(fill="white",
+                                        size = 2, linetype = "solid"),
+        plot.title = element_text(face = "italic",hjust = 0.5),
+        axis.title.x = element_text(face = "italic"),
+        axis.title.y = element_text(face = "italic"),
+        plot.background = element_rect(fill = "white"),
+        panel.grid.major.y = element_line(color="grey"),
+        panel.grid.minor.y = element_line(color="grey"),
+        panel.border=element_rect(colour="black",fill=NA,size=1)) 
+
+blank_theme <- theme_minimal()+
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.border = element_blank(),
+  panel.grid=element_blank(),
+  axis.ticks = element_blank(),
+  plot.title=element_text(size=12)
+  )
+
+
+```
+
+---
+
+# WOE Test
+
+This document tests the stability of the chosen bins Weights of Evidence over time.
+Produced is a datatable and a plot.
+
+```{r WOE table, echo=FALSE, warning=FALSE, include = TRUE}
+
+selectInput("variable", "Choose Variable:", choices = unique(colnames(joined_adw_1[3:45])))
+
+test <- reactive({
+test <- test::WOE_test(inputcuts = "d:/Users/dmcdonald/Documents/binning_test.csv", inputdefault = "d:/USERS/dmcdonald/Documents/default_with_ratios_2.csv",
+               input$variable)
+test$woe_2 <- round(test$woe_2, digits = 5)
+colnames(test) <- c("Date", "Cutpoints", "WoE")
+test$WoE <- test$WoE * -1
+test <- test
+})
+
+renderDataTable({
+  datatable(test())
+})
+
+```
+
+```{r WOE plot, echo = FALSE, warning=FALSE, include=TRUE}
+
+renderPlotly({
+  ggplot(test(), aes(x = Date, y = WoE, color = Cutpoints)) +
+    geom_point() +
+    geom_line()
+})
+
+```
+

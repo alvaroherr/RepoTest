@@ -1,0 +1,374 @@
+---
+title:  R Markdown Template 
+author:  Quant Risk GT
+date:  "`r format(Sys.time(), '%d %B, %Y')`"
+runtime: shiny
+output: 
+   html_document:
+    css: GTStyle.css
+    number_sections: TRUE
+    fig_caption: true
+    includes:
+    after_body: Footer.html
+---
+
+<img src="GTLogo.jpg" style="position:absolute;top:20px;right:20px;" width="200px"/>
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+#------------------------------------
+#      Install packages
+#------------------------------------
+  packages <- c("DT", "dplyr", "knitr", "kableExtra", "MASS", "grid", "gridExtra", "ggplot2", "lattice", "shiny", "plotly", "quantmod", "dygraphs", "maps", "leaflet")
+  
+  for (x in packages){
+    if(x %in% rownames(installed.packages()) == FALSE){
+      install.packages(x)
+    }
+  }
+
+#-----------------------------------
+#   GT Themed Colour Palettes 
+#-----------------------------------
+# The GT color template is saved as a vector. You will have to call the vector in order to fill the graphs in GT colors.
+GT_Colours <- c("#E62841","#00a7b5","#9BD732","#ff7d1e","#4f2d7f","#C8BEAF")
+
+GT_Purple <- c("#DACDED","#B59BDB","#7C69C9","#4f2d7f","#3B215F")
+GT_Blue <- c("#BDF9FF","#7BF4FE","#39EFFF","#00a7b5","#007D87")
+GT_Green <- c("#EBF7D6","#D7EEAD","#C3E783","#9BD732","#75A620")
+GT_Orange <- c("#FFE5D2","#FFCBA5","#FFB177","#ff7d1e","#D55A00")
+GT_Red <- c("#FAD4D9","#F5A9B2","#F07E8C","#E62841","#B5152A")
+GT_Grey <- c("#F0EDE8","#e6e1da","#DCD7CD","#C8BEAF","#B4A692")
+
+# GT_AllColours has the 6 main colours in the first 6 entries. Entry 7 to entry 30 get darker and but are the same colours, as above.
+GT_AllColours <- c("#4f2d7f","#00a7b5","#9BD732","#ff7d1e","#E62841", "#C8BEAF",
+                   "#DACDED","#BDF9FF","#EBF7D6","#FFE5D2","#FAD4D9","#F0EDE8",
+                   "#B59BDB","#7BF4FE","#D7EEAD","#FFCBA5","#F5A9B2","#e6e1da",
+                   "#7C69C9","#39EFFF","#C3E783","#FFB177","#F07E8C","#DCD7CD",
+                   "#3B215F","#007D87","#75A620","#D55A00","#B5152A","#B4A692")
+
+#-----------------------------------------------
+# Graph Formatting
+#----------------------------------------------
+library(ggplot2)
+plot_background <-   theme(strip.background =element_rect(fill="white"))+
+  theme(panel.background = element_rect(fill="white",
+                                        size = 2, linetype = "solid"),
+        plot.title = element_text(face = "italic",hjust = 0.5),
+        axis.title.x = element_text(face = "italic"),
+        axis.title.y = element_text(face = "italic"),
+        plot.background = element_rect(fill = "white"),
+        panel.grid.major.y = element_line(color="grey"),
+        panel.grid.minor.y = element_line(color="grey"),
+        panel.border=element_rect(colour="black",fill=NA,size=1)) 
+
+
+blank_theme <- theme_minimal()+
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.border = element_blank(),
+  panel.grid=element_blank(),
+  axis.ticks = element_blank(),
+  plot.title=element_text(size=12)
+  )
+
+
+
+```
+
+---
+
+# Header 1
+## Adding an RMarkdown Template  {.tabset .tabset-fade}
+
+Welcome to R Markdown! This file is what a user will see when they select the template.
+
+You can knit the new document to take a look at the resulting html file. The rmarkdown package will call the knitr package. `knitr` will run each chunk of R code in the document and append the results of the code to the document next to the code chunk. This workflow saves time and facilitates reproducible reports.
+
+Finally, be sure to remove this message!
+
+### Styling and Formatting
+While R Markdown has a few in-built themes to customise the appearance of a document that can be passed to the YAML header, a stylesheet can be used to further customise the appearance of the document. This R Markdown Template comes with a customised 'GTStyle' .css file which provides the styles of the document.
+
+R markdown allows to easily format your text. You can add [links](www.r-graph-gallery.com), write in **bold** or *italic*. This is very well explained in the [Rstudio cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf).
+
+
+### Code
+Code chunks are used to render R (and code from other programming languages!) output into a document.
+All code falls between the triple backtrick marks.You can write this manually but within R Studio, there’s a little green Insert button in the source pane that will insert code chunks when clicked. Also when working R-Studio, a little green arrow appears at the end of the code block, clicking this will run and evaluate the code.
+
+Inside the curly braces, options can be passed to control the output of the code chunk, the name of the chunk, how it appears, whether it’s evaluated, etc. There’s also a whole range of figure options specifically for configuring the appearance of plots within the document.
+
+Some common options include:
+
+**echo=TRUE or FALSE**
+If TRUE is selected, the actual code in the chunk appears in your document along with the results it produced. If FALSE is selected, the code does not appear and only the output does.
+
+**warning=TRUE or FALSE**
+If TRUE is selected (is by default), all outputted warnings from the code are included in the document. If FALSE is selected, these wanrings are not included.
+
+**include=TRUE or FALSE**
+If TRUE is selected (is by default), the output from the code is included in the document. If FALSE is selected, the code will still run but the output is not included in the document. This can be useful if you use certain calculations from this chunk in later chunks and the actual output from this chunk is not of interest.
+
+Some others include eval= and messages= etc.
+
+***
+
+# Header 2 {.tabset .tabset-fade}
+
+R Markdown documents are a perfect platform for interactive content.
+HTML widgets work just like R plots except they produce interactive web visualizations. A line or two of R code is all it takes to produce a D3 graphic or Leaflet map. HTML widgets can be used at the R console as well as embedded in R Markdown reports and Shiny web applications.
+
+## <span style="color:black"> Tables </span>
+
+The tables have been created using the 'mtcars' R data.
+The command used to knit the table for html reports is `datatable()`. DataTables displays R matrices or data frames as interactive HTML tables that support filtering, pagination, and sorting.
+
+```{r tables, echo=FALSE, warning=FALSE, message=FALSE}
+
+#-----------------------------------
+#  Example: mtcars data set 
+#-----------------------------------
+library(DT)
+data(mtcars)
+
+DT::datatable(mtcars)
+
+```
+
+Kable is another option when producing tables in R Markdown, along with the extension kableExtra it allows more formatting and styling of a table. You can use these packages to produce a simple table by using their default settings.
+
+To learn how to generate complex table, please visit: https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html#header_rows.
+
+```{r Formatted tables, echo=FALSE, warning=FALSE, message=FALSE}
+
+#-----------------------------------
+#  Example: mtcars data set 
+#-----------------------------------
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(formattable)
+
+mtcars[1:5, 1:4] %>%
+  mutate(
+    car = row.names(.),
+    mpg = color_tile("white", "orange")(mpg),
+    cyl = cell_spec(cyl, angle = (1:5)*60, 
+                    background = "red", color = "white", align = "center"),
+    disp = ifelse(disp > 200,
+                  cell_spec(disp, color = "red", bold = T),
+                  cell_spec(disp, color = "green", italic = T)),
+    hp = color_bar("lightgreen")(hp)
+  ) %>%
+  select(car, everything()) %>%
+  kable(escape = F) %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(5, width = "3cm") %>%
+  add_header_above(c(" ", "Group 1" = 2, "Group 2" = 2))
+
+```
+
+```{r Download csv, echo=FALSE, warning=FALSE, message=FALSE}
+
+#-----------------------------------
+#  Download csv file 
+#-----------------------------------
+
+inputPanel(
+  downloadHandler(
+  filename = "mtcars.csv",
+  content = function(file) {
+    write.csv(mtcars, file, row.names = FALSE)
+  })
+)
+
+
+```
+
+
+## <span style="color:black"> GT Themed Graphs </span>
+
+The graphs have been created using the 'birthwt' R data.
+
+For creating R charts in an RMarkdown environment with HTML output (such as RStudio), simply print a graph you created using the plotly R package in a code chunk and it will result in an interactive HTML graph in the viewer.
+
+```{r GT themed graphs, echo=FALSE,warning=FALSE, message=FALSE, fig.cap="Figure: Here is an important caption."}
+#-----------------------------------
+#  Example: birthwt data set 
+#-----------------------------------
+
+library(MASS)
+library(gridExtra)
+library(grid)
+library(ggplot2)
+library(lattice)
+library(plotly)
+
+g1 <- ggplotly(ggplot(birthwt, aes(x=race,fill=factor(ftv))) +
+  geom_bar(position="stack") + scale_fill_manual(values = GT_Colours))
+g2 <- ggplotly(ggplot(birthwt, aes(x=race,fill=factor(ftv))) +
+  geom_bar(position="dodge") + scale_fill_manual(values = GT_Colours))
+g3 <- ggplotly(ggplot(birthwt, aes(x=race,fill=factor(ftv))) +
+  geom_bar(position="fill") + scale_fill_manual(values = GT_Colours))
+g4 <- ggplotly(ggplot(birthwt, aes(x=race,fill=factor(ftv))) +
+  geom_bar(position=position_dodge(width=0.5)) + scale_fill_manual(values = GT_Colours))
+
+subplot(g1,g2,g3,g4, nrows = 2,  shareX = TRUE, titleX = FALSE)
+
+```
+
+All the graphs can be seen in a GT colour palette. The GT color template is saved as a vector. You will have to call the vector in order to fill the graphs in GT colors.
+
+```{r GT themed monochromatic graphs, echo=FALSE,warning=FALSE, message=FALSE, fig.cap="Figure: Here is an important caption."}
+#-----------------------------------
+#  Monochromatic graphs 
+#-----------------------------------
+
+df <- data.frame(
+  group = c("Male", "Female", "Child"),
+  value = c(25, 25, 50)
+  )
+
+g5 <- ggplot(df, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) +
+  scale_fill_manual(values= GT_Purple) + plot_background
+
+g6 <- ggplot(df, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) +
+  scale_fill_manual(values= GT_Orange) + plot_background
+
+g7 <- ggplot(df, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) +
+  scale_fill_manual(values= GT_Blue) + plot_background
+
+g8 <- ggplot(df, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) +
+  scale_fill_manual(values= GT_Red) + plot_background
+grid.arrange(g5,g6,g7,g8, nrow=2, ncol=2)
+
+```
+
+
+## <span style="color:black"> Shiny Dashboard </span>
+
+Unlike the more traditional workflow of creating static reports, you can create documents that allow the readers to change the parameters underlying your analysis and see the results immediately in Shiny R Markdown documents.
+A standard R plot can be made interactive by wrapping
+it in the Shiny `renderPlot()` function. The `selectInput()`
+function creates the input widget to drive the plot.
+
+Note that the output format of the R Markdown document must be an HTML format. That is, the document should generate a web page (a *.html file). Non-HTML formats such as pdf_document and word_document will not work with the Shiny runtime.
+
+```{r Interactive plots: Shiny , echo=FALSE, warning=FALSE, message=FALSE}
+#-----------------------------------
+#  Example: Geyser data set 
+#-----------------------------------
+
+library(shiny)
+sliderInput("bins", "Number of bins:", 30, min = 1, max = 50)
+
+renderPlot({
+  x    = faithful[, 2]  # Old Geyser data
+  bins = seq(min(x), max(x), length.out = input$bins + 1)
+
+  # draw the histogram with the specified number of bins
+  hist(x, breaks = bins, col = GT_AllColours, border = 'white')
+})
+
+```
+
+## <span style="color:black"> Dygraphs </span>
+Dygraphs provides rich facilities for charting time-series data in R and includes support for many interactive features including series/point highlighting, zooming, and panning.
+
+```{r Interactive plots: Dygraphs, echo=FALSE, warning=FALSE, message=FALSE}
+#--------------------------------------
+#  Example: AAP and MSFT stock data set 
+#---------------------------------------
+
+library(dygraphs)
+library(quantmod)
+tickers <- c("AAPL", "MSFT")
+getSymbols(tickers)
+closePrices <- do.call(merge, lapply(tickers, function(x) Cl(get(x))))
+dateWindow <- c("2018-01-01", "2020-01-01")
+
+dygraph(closePrices, main = "Value", group = "stock") %>%
+  dyRebase(value = 100) %>%
+  dyOptions(stackedGraph = TRUE,  colors = GT_AllColours) %>%
+  dyRangeSelector(dateWindow = dateWindow)
+
+dygraph(closePrices, main = "Percent", group = "stock") %>%
+  dyRebase(percent = TRUE) %>%
+  dyOptions(stackedGraph = TRUE,  colors = GT_AllColours) %>%
+  dyRangeSelector(dateWindow = dateWindow)
+
+```
+
+## <span style="color:black"> Leaflet </span>
+Leaflet is a JavaScript library for creating dynamic maps that support panning and zooming along with various annotations like markers, polygons, and popups.
+
+```{r Interactive Plots: Leaflet, echo=FALSE, warning=FALSE, message=FALSE}
+#-----------------------------------
+#  Example: US maps data set 
+#-----------------------------------
+
+library(maps)
+library(leaflet)
+
+mapStates = map("state", fill = TRUE, plot = FALSE)
+leaflet(data = mapStates) %>% addTiles() %>%
+  addPolygons(fillColor = GT_AllColours, stroke = FALSE)
+
+```
+
+***
+
+# Header 3
+## Typesetting Mathematical Equations {.tabset .tabset-fade}
+Equations can be formatted inline or as displayed formulas. In the latter case, they are centered and set off from the main text. In the former case, the mathematical material occurs smoothly in the line of text.
+
+Inline mathematical material is set off by the use of single dollar-sign characters. Consequently, if you wish to use a dollar sign (for example, to indicate currency), you need to preface it with a back-slash. 
+
+This section contains a cheat sheet for all the mathematical formulas.
+
+### <span style="color:black"> Basic </span>
+This summation expression $\sum_{i=1}^n X_i$ appears inline.
+
+This summation expression is in display form
+$$\sum_{i=1}^{n} X^3_i$$
+
+Subscripts and Superscripts
+$$X_i$$
+$$X_{i}$$
+
+Square-Roots
+$$\sqrt{b^2 - 4ac}$$
+
+
+Complex Equations
+$$
+E = \frac{mc^2}{\sqrt{1-\frac{v^2}{c^2}}}
+$$
+Matrices
+$$\mathbf{X} = \left[\begin{array}
+{rrr}
+1 & 2 & 3 \\
+4 & 5 & 6 \\
+7 & 8 & 9
+\end{array}\right]
+$$
+
+
+
+### <span style="color:black"> Characters </span>
+Greeks
+$$\alpha, \beta,  \gamma, \Gamma$$
+
+Special Symbols
+$$a \pm b$$
+$$x \ge 15$$
+$$a_i \ge 0~~~\forall i$$
+Special Functions
+$$\int_0^{2\pi} \sin x~dx$$
+

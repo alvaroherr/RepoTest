@@ -1,0 +1,10 @@
+Package: GTquantrisk
+Type: Package
+Title: Various functions used to build the tools used by GT Quant Risk
+Version: 0.1.0
+Author: GT Quantitative Risk
+Maintainer: The package maintainer <yourself@somewhere.net>
+Description: Compilation of various statistical functions along with some functions used to build tools such as the Financial Dictionary and Data Quality Tool.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true

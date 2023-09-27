@@ -1,0 +1,35 @@
+---
+title: "Outlier Report - Data Quality"
+author: "Quantitative Risk - Grant Thornton"
+date: "14 January 2020"
+output: html_document
+params:
+  data1: NA
+  data2: NA
+---
+
+```{r, echo = FALSE}
+library(dplyr)
+library(dlookr)
+```
+
+### Outlier Plot
+
+Distributions of the dataset with **and** without outliers.
+
+```{r, echo = FALSE}
+plot_data <- params$data1
+plot_data %>%
+plot_outlier(value, col = "#663399")
+```
+
+### Outlier Table
+
+Table including the selected sector company outliers.
+
+```{r, echo = FALSE}
+table_data <- params$data2
+datatable(table_data,rownames = FALSE,class = 'cell-border stripe') 
+```
+
+

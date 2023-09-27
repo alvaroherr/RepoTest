@@ -1,0 +1,33 @@
+---
+title: "Overview Data Quality"
+author: "Quantitative Risk"
+date: "14 January 2020"
+output: html_document
+params:
+  data1: NA
+  data2: NA
+---
+
+```{r setup, echo=FALSE}
+library(DT)
+library(naniar)
+```
+
+### Overview
+
+The following table includes basic summary statistics for the dataset as a whole for a specified range of years.
+
+```{r overview_table, echo = FALSE}
+datatable(params$data1,rownames = FALSE,class = 'cell-border stripe') 
+```
+
+### Missing Plot
+
+The following plot highlights the percentage of data that is missing. This will allow you to remove variables which exceed a missing threshold.
+
+```{r missing, echo=FALSE}
+test_df <- params$data2
+gg_miss_var(test_df[, -c(1, 2)],show_pct = TRUE)
+```
+
+

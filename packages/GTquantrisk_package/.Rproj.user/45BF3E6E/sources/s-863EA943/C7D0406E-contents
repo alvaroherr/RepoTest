@@ -1,0 +1,5360 @@
+#' Gets the lag of data point in a dataframe.
+#'
+#' @param x - Each data point
+#' @return Used as part of the lagged_df function
+#' @examples
+#' Test <- last_year(x)
+#' @export
+#'
+
+####################
+##############################################################################################################################
+
+####################
+##############################################################################################################################
+# function that takes raw data and the mapping document to produce
+# a dataframe with column names labelled as per the mapping document
+
+# change all column names to stansardised as per the mapping document
+f_standardise_colnames <- function(t_input, t_map = mapping){
+  for(i in 1:nrow(t_map)){
+    target <- as.character(t_map[i,1])
+    for (j in 2:ncol(t_map)){
+      bad_name <- as.character(t_map[i,j])
+      names(t_input)[as.character(names(t_input)) == bad_name] <- target
+    }
+  }
+
+
+  # if column names cannot be standardised (because the column name is not present in the data or the mapping is incorrectly named)
+  # we take the missing standardised variable name name and create an empty column for it
+  standard_name <- as.vector(unlist(c(t_map[,1])))
+  for (name in 1:length(standard_name)){
+    if(standard_name[name] %in% colnames(t_input)){
+
+    }else{
+      data_to_be_added <- data.frame(matrix(nrow = nrow(t_input), ncol = 1))
+      colnames(data_to_be_added) <- standard_name[name]
+      t_input <- cbind(t_input, data_to_be_added)
+    }
+  }
+  return(t_input)
+}
+
+#########################################################################################################################
+# function that takes the renamed column data from f_rename_colnames and the mapping document to produce
+# a dataframe of standard size (number of column names = number of mapping variables)
+
+f_standard_size <- function(t_input, t_map = mapping){
+  map_names <- as.vector(unlist(c(t_map[,1])))
+  not_in <- c()
+
+  # find column names in data that aren't in mapping document and add them to an empty vector
+  for(i in 1:length(colnames(t_input))){
+    if(colnames(t_input)[i] %in% map_names){
+
+    }else{
+      not_in <- c(not_in, colnames(t_input)[i])
+    }
+  }
+
+  # remove these column names from data
+  if(is.null(not_in)){
+    t_input <- t_input
+  }else{
+    t_input <- t_input %>%
+      select( - c(not_in))
+  }
+  return(t_input)
+}
+
+
+
+##########################################################################################################################
+# function that takes the standard size data from f_standard_size and the mapping document to produce
+# a dataframe of standard format (symbol, date, all other variable names)
+
+f_standard_format <- function(t_input, t_map = mapping){
+
+  # Convert to date format
+  t_input$date <- as.Date(format.Date(t_input$date, "%Y-12-31"))
+
+  # make date the second column
+  col_idx <- grep("date", names(t_input))
+  t_input <- t_input[, c(col_idx, (1:ncol(t_input))[-col_idx])]
+
+  # make symbol the first column
+  col_idx <- grep("symbol", names(t_input))
+  t_input <- t_input[, c(col_idx, (1:ncol(t_input))[-col_idx])]
+
+  return(t_input)
+}
+
+#######################################################################################
+
+#  t_financial_data_all unsorted etc
+
+f_standard_clean_final <- function(t_input, t_map = mapping){
+  data1 <- f_standardise_colnames(t_input, t_map)
+  data2 <- f_standard_size(data1, t_map)
+  data3 <- f_standard_format(data2, t_map)
+  return(data3)
+}
+
+# f_standard_clean_final(data = t_smyth)
+
+#######################################################################################
+
+
+## Function that removes crazy outliers per each pbservation grouping
+f_remove_wrong <- function(t_input) {
+  for(i in 1:(nrow(t_input)/length(unique(t_input$date)))){
+    for(j in 3:ncol(t_input)){
+      outlier_test <- t_input[c((1 + length(unique(t_input$date))*(i-1)):(length(unique(t_input$date)) * i)),j]
+      median_value <- median(as.numeric(unlist(outlier_test)),na.rm = TRUE)
+      if(is.na(median_value)){
+
+      }else{
+        for(k in 1:length(unique(t_input$date))){
+          if(is.na(outlier_test[k])){
+
+          }else if (outlier_test[k] > 50 * abs(median_value)){
+            t_input[(1 + length(unique(t_input$date))*(i-1)+(k-1)),j] <- NA
+          }else{
+            t_input[(1 + length(unique(t_input$date))*(i-1)+(k-1)),j] <- t_input[(1 + length(unique(t_input$date))*(i-1)+(k-1)),j]
+          }
+        }
+      }
+    }
+  }
+  return(t_input)
+}
+
+##################################################################################
+
+f_last_year <- function(x){
+  lag(x)
+}
+
+
+f_lagged_df <- function(t_input){
+  data_f <- t_input
+  col_names_test <- colnames(data_f[,-c(1,2)])
+  test_change <- data_f %>%
+    group_by(symbol) %>%
+    arrange(date,.by_group = TRUE) %>%
+    mutate_each(funs(f_last_year), col_names_test)
+
+  colnames(test_change) <- paste(colnames(data_f),"last",sep="_")
+
+  return(test_change)
+
+}
+
+f_all_data_wide <- function(t_input){
+  data_f <- t_input
+  data_fa <- data_f %>%
+    group_by(symbol) %>%
+    arrange(date,.by_group = TRUE)
+
+  return(data_fa)
+}
+
+
+f_binded_data <- function(t_input){
+  cbind(f_all_data_wide(t_input),f_lagged_df(t_input))
+}
+
+
+###########################################################################################################################
+
+## Function to extract the list of all the borrowers i.e the observations in the data for the blank data frame with built ratios
+f_borrowers <- function(data) {
+  v_borrowers <- c(sort(as.character(data$symbol)))
+  return(v_borrowers)
+}
+
+
+
+## Function to extract the column names for the blank dataframe with built ratios
+f_columns <- function(definitions = t_definitions) {
+  v_cols <- c("symbol", "date", sort(definitions$Name))
+  return(v_cols)
+}
+
+
+
+## Function to build empty data frame
+f_t_ratio_build <- function(data1, data2 = t_definitions) {
+  rows <- f_borrowers(data1)
+  columns <- f_columns(data2)
+
+  t_ratio <- data.frame(matrix(ncol = length(columns), nrow = length(rows)))
+  colnames(t_ratio) <- columns
+
+  t_ratio <- clean_names(t_ratio)
+  t_ratio$symbol <- sort(rows)
+  t_ratio$date <- data1$date
+
+  return(t_ratio)
+}
+
+
+# tommu <- t_ratio_build(bloomberg, t_definitions)
+
+# final_before_reshaped <-  f_ratio(tommu, bloomberg)
+
+
+f_ratio <- function(df1, df2, add_ratios) {
+
+  #Sales
+  df1$sales <- df2$revenue
+
+  #Asset Turnover
+  df1$asset_turnover <- (df2$revenue / df2$total_assets)
+
+  #Interest Cover Ratio
+  df1$interest_cover_ebit_ratio <- (df2$ebit / df2$interest_expense)
+
+  #Cash Flow Cover Ratio
+  df1$cash_flow_cover_ratio <- (df2$ebitda / df2$total_current_liabilities)
+
+  #Interest Cover (EBITDA) Ratio
+  df1$interest_cover_ebitda_ratio <- (df2$ebitda / ifelse(df2$interest_expense == 0, NA, df2$interest_expense))
+
+  #Operating Cash Flow
+  df1$operating_cash_flow_ratio <- (df2$operating_cash_flow / df2$total_current_liabilities)
+
+  #Debt Ratio
+  df1$debt_ratio <- (ifelse(!is.na(df2$short_term_debt & df2$long_term_debt),
+                            df2$short_term_debt + df2$long_term_debt,
+                            ifelse(is.na(df2$short_term_debt) & !is.na(df2$long_term_debt),
+                                   df2$long_term_debt,
+                                   ifelse(!is.na(df2$short_term_debt) & is.na(df2$long_term_debt),
+                                          df2$short_term_debt, NA)))) / (df2$total_assets)
+
+  #Total Debt to Equity
+  df1$total_debt_to_equity_ratio <- (ifelse(!is.na(df2$short_term_debt & df2$long_term_debt),
+                                            df2$short_term_debt + df2$long_term_debt,
+                                            ifelse(is.na(df2$short_term_debt) & !is.na(df2$long_term_debt),
+                                                   df2$long_term_debt,
+                                                   ifelse(!is.na(df2$short_term_debt) & is.na(df2$long_term_debt),
+                                                          df2$short_term_debt, NA)))) / (df2$total_shareholders_equity)
+  #negative ratios and group (special character for if they are missing)
+
+
+  #Long-term debt to equity
+  df1$long_term_debt_to_equity_ratio <- (df2$long_term_debt / df2$total_shareholders_equity)
+
+  #Cash ratio
+  df1$cash_ratio <- (df2$cash_and_cash_equivalents / df2$total_current_liabilities)
+
+  #Current Ratio
+  df1$current_ratio <- (df2$total_current_assets / df2$total_current_liabilities)
+
+  #Net working Capital
+  df1$net_working_capital <- (df2$total_current_assets - df2$total_current_liabilities)
+
+  #Quick Ratio
+  df1$quick_ratio <- ((df2$total_current_assets - df2$inventories) / df2$total_current_liabilities)
+
+  #Operating Margin
+  df1$operating_margin <- (df2$ebit / df2$revenue)
+
+  #ROE
+  df1$return_on_equity_roe <- (df2$net_income / df2$total_shareholders_equity)
+
+  #Net profit margin
+  df1$net_profit_margin <- (df2$net_income / df2$revenue)
+
+  #ROA
+  df1$return_on_assets_roa <- (df2$net_income / df2$total_assets)
+
+  #Gross Profit Margin
+  df1$gross_profit_margin <- ((df2$revenue - df2$cost_of_revenue)/ df2$revenue)
+
+  #Inventory Turnover
+  df1$inventory_turnover <- (df2$revenue / ifelse(df2$inventories == 0, NA, df2$inventories))
+
+  #Net Margin Trend
+  df1$net_margin_trend <- ((df2$net_income / df2$revenue) - (df2$net_income_last / df2$revenue_last)) / (df2$net_income_last / df2$revenue_last)
+
+  #Days Inventory
+  df1$days_inventory <- ((df2$receivables * 365)/ifelse(df2$cost_of_revenue == 0, NA, df2$cost_of_revenue))
+
+  #Days Payable
+  df1$days_payables <- ((df2$payables * 365)/ifelse(df2$cost_of_revenue == 0, NA, df2$cost_of_revenue))
+
+  #DuPont ROA
+  df1$du_pont_roa <- (df2$ebit - df2$income_tax_expense)/df2$total_assets
+
+  #DuPont ROE
+  df1$du_pont_roe <- ((df2$ebit -(df2$income_tax_expense + df2$interest_expense))/df2$total_shareholders_equity)
+
+  #EBIT Trend
+  df1$ebit_trend <- ((df2$ebit - df2$ebit_last)/abs(df2$ebit_last))
+
+  #EBITDA Trend
+  df1$ebitda_trend <- ((df2$ebitda - df2$ebitda_last)/abs(df2$ebitda_last))
+
+  #Gross Margin Trend
+  df1$gross_margin_trend <- (((df2$ebitda/df2$revenue)-(df2$ebitda_last/df2$revenue_last))/(abs(df2$ebitda_last/df2$revenue_last)))
+
+  #Interest Coverage
+  df1$interest_coverage <- (df2$operating_cash_flow/ifelse(df2$interest_expense == 0, NA, df2$interest_expense))
+
+  #Pretax Profit Margin
+  df1$pretax_profit_margin <- ((df2$ebit + df2$income_tax_expense)/df2$revenue)
+
+  #Total Liabilities to Equity Ratio
+  df1$total_liabilities_to_equity_ratio <- df2$total_liabilities / df2$total_shareholders_equity
+
+  #Return on Average Assets
+  df1$return_on_average_assets_roaa <- ((df2$net_income)/((df2$total_assets + df2$total_assets_last)/2))
+
+  #Return on Average Equity
+  df1$return_on_average_equity_roae <- ((df2$net_income)/((df2$total_shareholders_equity + df2$total_shareholders_equity_last)/2))
+
+  #Sales Growth Rate
+  df1$sales_growth_rate <- ((df2$revenue - df2$revenue_last)/df2$revenue_last)
+
+  #Short Term Financing
+  df1$short_term_financing <- (df2$total_current_liabilities/df2$total_assets)
+
+  #Average Assets
+  df1$average_assets <- ((df2$total_assets_last + df2$total_assets) / 2)
+
+  #Average Equity
+  df1$average_equity <- ((df2$total_shareholders_equity_last + df2$total_shareholders_equity) / 2)
+
+  #Operating Cash Flow
+  df1$operating_cash_flow <- df2$operating_cash_flow
+
+  #Cash Flow
+  df1$cash_flow <- (df2$operating_cash_flow + df2$investing_cash_flow + df2$financing_cash_flow)
+
+  #Debt to Capital
+  df1$debt_to_capital <- (ifelse(!is.na(df2$short_term_debt & df2$long_term_debt),
+                                 df2$short_term_debt + df2$long_term_debt,
+                                 ifelse(is.na(df2$short_term_debt) & !is.na(df2$long_term_debt),
+                                        df2$long_term_debt,
+                                        ifelse(!is.na(df2$short_term_debt) & is.na(df2$long_term_debt),
+                                               df2$short_term_debt, NA)))) / (df2$total_shareholders_equity + df2$long_term_debt)
+
+  #Liabilities to Assets Ratio
+  df1$liabilities_to_assets_ratio <- df2$total_liabilities / df2$total_assets
+
+  #Cash to Current Assets
+  df1$cash_to_current_assets <- df2$cash_and_cash_equivalents / df2$total_current_assets
+
+  #Collection Days
+  df1$collection_days <- (df2$receivables * 365) / df2$revenue
+
+  #Operating Cash Flow Margin
+  df1$operating_cash_flow_margin <- df2$operating_cash_flow /df2$revenue
+
+  #ESG ratios
+  if(add_ratios %in% 'yes'){
+    df1$scope_1_emp <- df2$scope_1 / df2$num_of_employ
+    df1$scope_2_emp <- df2$scope_2 / df2$num_of_employ
+    df1$scope_3_emp <- df2$scope_3 / df2$num_of_employ
+    df1$ghg_emp <- df2$total_ghg / df2$num_of_employ
+    df1$total_esg <- df2$esg_score/1
+    df1$envir_score <- df2$esg_environ_score/1
+    df1$social_score <- df2$esg_social_score/1
+
+  }else{
+
+  }
+
+  return(df1)
+
+}
+
+
+## Function to melt ratio dataframe
+f_reshape <- function(data1, data2 = t_definitions) {
+  subset <- subset(data1, select = -c(symbol, date))
+  names <- colnames(subset)
+
+  for(i in 1:length(names)){
+    data2[i,2] <- names[i]
+  }
+
+
+  reshaped_df1 <- melt(data1, id.vars = c("symbol", "date"))
+  reshaped_df1_final <- left_join(reshaped_df1, data2[, c(1,2)], by = c("variable" = "Name"))
+  return(reshaped_df1_final)
+}
+
+
+#-----------------------------------------------------------------------------------------#
+
+#                       Function to build relevant statistics                             #
+#    This functions takes the data that have been built from the ratios and returns some  #
+#    interesting summary statistics about the ratios. This is done between a certain date #
+#    range, where year1 is the start year, and year2 is the end year                      #
+
+f_statistical_overview <- function(year1,year2,data){
+
+  t_filtered_ratio <- data %>%
+    filter(date %in% as.Date(paste(year1,"12-31",sep="-")):as.Date(paste(year2,"12-31",sep="-")))
+
+  v_missing <- as.data.frame(diagnose(t_filtered_ratio[3:length(t_filtered_ratio)])[,c(1,3,4)])
+  v_outlier <- as.data.frame(diagnose_outlier(t_filtered_ratio[3:length(t_filtered_ratio)])[,1:3])
+  v_summary <- as.data.frame(diagnose_numeric(t_filtered_ratio[3:length(t_filtered_ratio)])[,c(1:7)])
+
+  t_statistics <- v_summary %>%
+    cbind(v_missing[,2:3], v_outlier[2:3])
+
+  t_statistics[,"missing_percent"] <- round(t_statistics[,"missing_percent"] /100,digits = 2)
+
+  t_statistics[,c(2:7,11)] <- round(t_statistics[,c(2:7,11)],digits = 2)
+
+  format(t_statistics, big.mark = ",",scientific = FALSE)
+}
+
+#-------Function for extracting outliers-------#
+
+f_outliers <- function(dataframe) {
+  dataframe %>%
+    select_if(is.numeric) %>%
+    map(~ boxplot.stats(.x)$out)
+}
+
+###### PSI FUNCTION ######
+
+f_base_psi <- function(data,type,variable_select,start_year,group_class,use){
+
+  perc_loaded <- data
+  v_dates <- as.Date(sort(unique(data$date)),"%Y-%m-%d")
+
+  if (group_class == "Full") {
+    perc_loaded  <- perc_loaded
+  }
+  else {
+    perc_loaded  <- perc_loaded  %>%
+      filter(sector %in% group_class)
+  }
+  perc_loaded <- perc_loaded %>%
+    filter(Type %in% type)
+  perc_loaded <- perc_loaded %>%
+    filter(variable %in% variable_select)
+  perc_loaded <- perc_loaded%>%
+    filter(date %in% v_dates[start_year-(year(v_dates[1])-1)])
+
+  perc_loaded_sorted <- sort(perc_loaded$value)
+  perc_loaded_decile <- decile(perc_loaded_sorted)
+  perc_loaded_decile_df <- data.frame(table(perc_loaded_decile))
+
+  decile_year_value <- data.frame(matrix(nrow=1,ncol=9))
+  for(i in 1:9){
+    decile_year_value[1,i] <- perc_loaded_sorted[sum(perc_loaded_decile_df[c(1:i),2])] # Finds deciles of year 1
+  }
+  colnames(decile_year_value) <- c("perc_.1","perc_.2","perc_.3","perc_.4","perc_.5","perc_.6","perc_.7","perc_.8","perc_.9")
+  decile_year_value <- decile_year_value
+
+  t_full_perc <- data
+  if (group_class == "Full") {
+    t_full_perc <- t_full_perc
+  }
+  else {
+    t_full_perc <- t_full_perc %>%
+      filter(sector %in% group_class)
+  }
+  t_full_perc <- t_full_perc %>%
+    filter(date %in% c(v_dates[(start_year-(year(v_dates[1])-2)):length(v_dates)]))
+  t_full_perc <- t_full_perc %>% filter(Type %in% type)
+  t_full_perc <- t_full_perc %>% filter(variable %in% variable_select)
+  t_full_perc <- t_full_perc %>%
+    mutate(perc_exp_.1 = ifelse(value <= decile_year_value[,"perc_.1"],1,0),
+           perc_exp_.2 = ifelse(value <= decile_year_value[,"perc_.2"],1,0),
+           perc_exp_.3 = ifelse(value <= decile_year_value[,"perc_.3"],1,0),
+           perc_exp_.4 = ifelse(value <= decile_year_value[,"perc_.4"],1,0),
+           perc_exp_.5 = ifelse(value <= decile_year_value[,"perc_.5"],1,0),
+           perc_exp_.6 = ifelse(value <= decile_year_value[,"perc_.6"],1,0),
+           perc_exp_.7 = ifelse(value <= decile_year_value[,"perc_.7"],1,0),
+           perc_exp_.8 = ifelse(value <= decile_year_value[,"perc_.8"],1,0),
+           perc_exp_.9 = ifelse(value <= decile_year_value[,"perc_.9"],1,0))
+  t_full_perc <- t_full_perc %>% na.omit()
+
+  percentages <- t_full_perc %>%
+    group_by(date)%>%
+    summarise_at(vars(perc_exp_.1:perc_exp_.9),mean,na.rm=TRUE)
+
+  deciles <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+  deciles[,1] <- percentages[,1]
+
+  for(i in 1:9){
+    deciles[,i+1] <- i/10 - percentages[,i+1]
+  }
+
+  colnames(deciles) <- colnames(percentages)
+
+
+  log_table <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+
+  log_table <- percentages[,1]
+
+  for(i in 1:9){
+    log_table[,i+1] <- log((i/10)/percentages[,i+1],base = exp(1))
+  }
+
+  colnames(log_table) <- colnames(percentages)
+
+  psi_single <- log_table[,c(2:10)] * deciles[,c(2:10)]
+
+  psi_final <- data.frame(rowSums(psi_single))
+
+  psi_dates <- v_dates[(start_year-year(v_dates[1])+2):length(v_dates)]
+
+  psi_final <- cbind(psi_dates,psi_final)
+
+  psi_final[,2] <- round(psi_final[,2],2)
+
+  colnames(psi_final) <- c("date","PSI")
+
+  psi_transpose <- psi_final
+
+  if(use == "values"){
+    return(psi_transpose)
+  }else{
+    return(percentages)
+  }
+}
+
+#ROLLING CASE#
+
+#This finds the deciles for the required years that we will use
+
+f_rolling_psi <- function(data,type, variable_select, start_year,group_class,use){
+
+  perc_loaded <- data
+  v_dates <- as.Date(sort(unique(data$date)),"%Y-%m-%d")
+
+  all_deciles <- data.frame()
+  rolling_data <- data.frame()
+  deciles_rolling <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+
+  for(i in (start_year-(year(v_dates[1])-1)):length(v_dates)){
+    variable_data <- data
+    if (group_class == "Full") {
+      variable_data <- variable_data
+    }
+    else {
+      variable_data <- variable_data %>%
+        filter(sector %in% group_class)
+    }
+    variable_data <-variable_data %>%
+      filter(Type %in% type) %>%
+      filter(variable %in% variable_select) %>%
+      filter(date %in% v_dates[i])
+
+    sorted_variable <- sort(variable_data$value)
+    decile_variable <- decile(sorted_variable)
+    decile_df <- data.frame(table(decile_variable))
+
+    decile_year_value <- data.frame(matrix(nrow=1,ncol=9))
+
+    for(j in 1:9){
+      decile_year_value[1,j] <- sorted_variable[sum(decile_df[c(1:j),2])] # Finds deciles of all years
+    }
+    colnames(decile_year_value) <- c("perc_.1","perc_.2","perc_.3","perc_.4","perc_.5","perc_.6","perc_.7","perc_.8","perc_.9")
+    assign(paste("decile",i,sep="_"),  decile_year_value)
+  }
+
+
+  for(i in (start_year-(year(v_dates[1])-1)):length(v_dates)){
+    assign(paste("all_deciles",sep=""), rbind(all_deciles, get(paste("decile",i,sep="_"))))
+  }
+
+  all_deciles <- all_deciles
+
+  #We will then look at how we can find the number of how many fit into the previous year
+
+  for(i in (start_year-(year(v_dates[1])-1)):(length(v_dates)-1)){
+    t_full_perc <- data
+    if (group_class == "Full") {
+      t_full_perc <- t_full_perc
+    }
+    else {
+      t_full_perc <- t_full_perc %>%
+        filter(sector %in% group_class)
+    }
+    t_full_perc <- t_full_perc %>%
+      filter(date %in% c(v_dates[(i+1):(i+1)]))
+    t_full_perc <- t_full_perc %>% filter(Type %in% type)
+    t_full_perc <- t_full_perc %>% filter(variable %in% variable_select)
+    t_full_perc <- t_full_perc %>%
+      mutate(perc_exp_.1 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.1"],1,0),
+             perc_exp_.2 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.2"],1,0),
+             perc_exp_.3 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.3"],1,0),
+             perc_exp_.4 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.4"],1,0),
+             perc_exp_.5 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.5"],1,0),
+             perc_exp_.6 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.6"],1,0),
+             perc_exp_.7 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.7"],1,0),
+             perc_exp_.8 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.8"],1,0),
+             perc_exp_.9 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.9"],1,0))
+    t_full_perc <- t_full_perc %>% na.omit()
+    assign(paste("rolling",i+1,sep="_"),t_full_perc)
+  }
+
+  for(i in (start_year-(year(v_dates[1])-1)):(length(v_dates)-1)){
+    rolling_data <- rbind(rolling_data,get(paste("rolling",i+1,sep="_")))
+  }
+
+  percentages_rolling <- rolling_data %>%
+    group_by(date)%>%
+    summarise_at(vars(perc_exp_.1:perc_exp_.9),mean,na.rm=TRUE)
+
+  percentages <- percentages_rolling
+
+  #################GOOD#########################
+
+
+
+  deciles_rolling[,1] <- percentages_rolling[,1]
+
+  for(i in 1:9){
+    deciles_rolling[,i+1] <- i/10 - percentages_rolling[,i+1]
+  }
+
+  colnames(deciles_rolling) <- colnames(percentages_rolling)
+
+
+  log_table_rolling <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+
+  log_table_rolling <- percentages_rolling[,1]
+
+  for(i in 1:9){
+    log_table_rolling[,i+1] <- log((i/10)/percentages_rolling[,i+1],base = exp(1))
+  }
+
+  colnames(log_table_rolling) <- colnames(percentages_rolling)
+
+  psi_single_rolling <- log_table_rolling[,c(2:10)] * deciles_rolling[,c(2:10)]
+
+  psi_final_rolling <- data.frame(rowSums(psi_single_rolling))
+
+  psi_dates <- v_dates[(start_year-year(v_dates[1])+2):length(v_dates)]
+
+  psi_final_rolling <- cbind(psi_dates,psi_final_rolling)
+
+  psi_final_rolling[,2] <- round(psi_final_rolling[,2],2)
+
+  colnames(psi_final_rolling) <- c("date","PSI")
+
+  psi_transpose <- psi_final_rolling
+
+  if(use == "values"){
+    return(psi_transpose)
+  }else{
+    return(percentages)
+  }
+
+}
+
+#---------------Shiny User Interface---------------------------------------#
+f_ui_build <- function(data1, data2 = t_definitions) {
+  sector_list <- sort(unique(data1$sector))
+  data1$date <- as.Date(data1$date, "%Y-%m-%d")
+  data1 <- data1
+  ui <- dashboardPage(
+    #Title for the App
+    dashboardHeader(title = "Financial Risk Driver Tool"),
+    dashboardSidebar(
+      conditionalPanel(
+        'input.tabs === "Data Cleaning"',
+        sliderInput("dq_missing_req",
+                    "Choose max missing:",
+                    min = as.numeric(0),
+                    max = as.numeric(1),
+                    value = as.numeric(0.3),
+                    step = as.numeric(0.05),sep = ""),
+        actionButton("dq_button",
+                     "Filter Dataframe")
+      ),
+      conditionalPanel(
+        'input.tabs === "Overview"',
+        sliderInput("overview_years",
+                    "Choose a year range:",
+                    min = as.numeric(substring(min(data1$date), 1,4)),
+                    max = as.numeric(substring(max(data1$date), 1,4)),
+                    value = c(as.numeric(substring(min(data1$date), 1,4)),as.numeric(substring(max(data1$date), 1,4))),
+                    step = 1,sep=""),
+        downloadButton("overview_report", "Generate Report"),
+        tags$style(type="text/css","#overview_report{background-color:purple;color: black;font-family: Courier New}")
+
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Analysis"',
+        selectInput("type",
+                    "1a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("variable",
+                    "1b) Choose the metric:",
+                    choices = NULL),
+        selectInput("analysis_sector",
+                    "2a) Choose Sector:",
+                    choices = c("All", sector_list))
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Statistics per sector"',
+        selectInput("statistics_sector",
+                    "1a) Choose sector:",
+                    choices = c("All", sector_list)),
+        selectInput("statistics_type",
+                    "2a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("statistics_variable",
+                    "2b) Choose the metric:",
+                    choices = NULL)
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Outlier Analysis"',
+        selectInput("type_outlier",
+                    "1a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("variable_outlier",
+                    "1b) Choose the metric:",
+                    choices = NULL),
+        selectInput("outlier_sector",
+                    "1c) Choose the sector:",
+                    choices = c("All", sector_list)),
+        sliderInput("year_outlier",
+                    "2a) Choose a year range:",
+                    min = as.numeric(substring(min(data1$date), 1,4)),
+                    max = as.numeric(substring(max(data1$date), 1,4)),
+                    value = c(as.numeric(substring(min(data1$date), 1,4)),as.numeric(substring(max(data1$date), 1,4))),
+                    step = 1,sep=""),
+        downloadButton("outlier_report", "Generate Report"),
+        tags$style(type="text/css","#outlier_report{background-color:purple;color: black;font-family: Courier New}")
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Correlation Matrix"',
+        selectInput("visualisation_sector",
+                    "1a) Choose sector:",
+                    choices = c("All", sector_list)),
+        selectInput("Visualisation_type",
+                    "1b) Type of Ratio:",
+                    choices = c("All", sort(unique(data2$Type))))
+      ),
+
+
+
+      conditionalPanel(
+        'input.tabs === "Company Analysis"',
+        selectInput("company_sector",
+                    "1a) Choose Group:",
+                    choices = c("All",sector_list)),
+        selectInput("company_symbol",
+                    "1b) Choose a company:",
+                    choices = NULL),
+        selectInput("company_type",
+                    "2a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("company_variable",
+                    "2b) Choose the metric:",
+                    choices = NULL)
+
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Population Stability Index"',
+        selectInput("psi_sector",
+                    "1a) Choose the population:",
+                    choices = c("Full", sector_list)),
+        selectInput("psi_type",
+                    "2a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("psi_variable",
+                    "2b) Choose the metric:",
+                    choices = NULL),
+        selectInput("psi_calculation",
+                    "3a) Choose the type of calculation:",
+                    choices = c("Base", "Rolling")),
+        numericInput("psi_start","Choose Start Point:",
+                     value = 2005,
+                     min=2004,
+                     max=2019,
+                     step = 1)
+      ),
+
+
+
+      #      conditionalPanel(
+      #       'input.tabs === "Macroeconomic Indicators"',
+      #      selectInput("macro_area",
+      #                 "1a) Location:",
+      #                choices = c("ECB", "US")),
+      #   selectInput("macro_type",
+      #              "1b) Indicator:",
+      #             choices = c("interest_rate", "inflation"))
+
+      #  ),
+
+      conditionalPanel(
+        'input.tabs === "Data Quality Report"',
+        selectInput("dq_type",
+                    "1a) Type of Ratio:",
+                    choices = c("All Ratios", sort(unique(data2$Type)))),
+        selectInput("dq_sector",
+                    "1b) Choose Group:",
+                    choices = c("All", sector_list))
+      )
+    ),
+
+
+
+
+
+    dashboardBody(
+      useShinyjs(),
+      tabsetPanel(type = "tabs",
+                  id = "tabs",
+                  tabPanel("Data Cleaning",
+                           DT::dataTableOutput("company_missing_table"),
+                           br(),
+                  ),
+                  tabPanel("Overview",
+                           fluidRow(column(12, align = "center",
+                                           textOutput("table_statshead"))),
+                           tags$h1(tags$style("#table_statshead{color : purple; font-size : 20px}")),
+                           br(),
+                           DT::dataTableOutput("table_stats"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("missing_head"))),
+                           tags$h1(tags$style("#missing_head{color: purple; font-size : 20px}")),
+                           br(),
+                           plotlyOutput("missing_plot")
+                  ),
+
+                  tabPanel("Analysis",
+                           #Make the plot space
+                           plotlyOutput("financeplot")
+                  ),
+                  # textOutput("text3")
+                  # ),
+
+                  tabPanel("Statistics per sector",
+                           fluidRow(column(12, align = "center", textOutput("tablehead"))),
+                           tags$h1(tags$style("#tablehead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           dataTableOutput("stats"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("stats_comphead"))),
+                           tags$h1(tags$style("#stats_comphead{color : purple; font-size : 15px}", align = "center")),
+                           br(),
+                           dataTableOutput("stats_comp")
+                  ),
+
+                  tabPanel("Outlier Analysis",
+                           fluidRow(column(12, align = "center", textOutput("outlierhead"))),
+                           tags$h1(tags$style("#outlierhead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           plotOutput("outlier_plot"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("outlier_tablehead"))),
+                           tags$h1(tags$style("#outlier_tablehead{color: purple; font-size : 20px}", align = "center")),
+                           br(),
+                           dataTableOutput("outlier_table")
+                  ),
+
+                  tabPanel("Correlation Matrix",
+                           fluidRow(column(12, align = "center", textOutput("corrhead"))),
+                           tags$h1(tags$style("#corrhead{color : purple; font-size : 20px}", align = "center")),
+                           plotlyOutput("corr"),
+                           fluidRow(column(12, align = "left", textOutput("corr_error"))),
+                           tags$h1(tags$style("#corr_error{color : black; font-size : 15px}", align = "left"))
+                  ),
+
+                  tabPanel("Company Analysis",
+                           fluidRow(column(12, align = "center",
+                                           textOutput("header"))),
+
+                           hidden(
+                             div(id = 'text_div',
+                                 verbatimTextOutput("text")
+                             )
+                           ),
+                           tags$b(tags$style("#text{color : purple; font-size: 30px;}")),
+
+                           tags$br(),
+
+                           fluidRow(column(12,
+                                           "", fixedRow(column(3,
+                                                               textOutput("Definition")),
+                                                        column(9,
+                                                               textOutput("definition"))
+                                           ))),
+
+                           tags$h1(tags$style("#header{color : purple; font-size: 20px;}")),
+                           tags$h3(tags$style("#Definition{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#definition{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+                           br(),
+                           br(),
+
+                           fluidRow(column(12,
+                                           "", fluidRow(column(3,
+                                                               textOutput("ExpectedRiskDirection")),
+                                                        column(9,
+                                                               textOutput("riskdirection"))
+                                           ))),
+
+                           tags$h3(tags$style("#ExpectedRiskDirection{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#riskdirection{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+                           br(),
+                           br(),
+
+                           fluidRow(column(12,
+                                           "",fluidRow(column(3,
+                                                              textOutput("Formula")),
+                                                       column(9,
+                                                              textOutput("formula"))
+                                           ))),
+
+                           tags$h3(tags$style("#Formula{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#formula{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+
+
+                           br(),
+                           br(),
+
+                           dataTableOutput("componenttable"),
+
+
+                           br(),
+                           br(),
+
+                           dataTableOutput("subderivationtable"),
+                           br(),
+                           br(),
+
+
+                           fluidRow(column(12,
+                                           "",fluidRow(column(3,
+                                                              textOutput("FormulaFullFormat")),
+                                                       column(9,
+                                                              textOutput("fullformula"))
+                                           ))),
+
+                           tags$h3(tags$style("#FormulaFullFormat{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#fullformula{color: black;
+                                              font-size: 15px;
+                                              }")),
+                           fluidRow(column(12, align = "center", textOutput("companyhead"))),
+                           tags$h1(tags$style("#companyhead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("company_info"))),
+                           tags$head(tags$style("#company_info{color: black;
+                                 font-size: 20px;
+                                 font-style: italic;
+                                 border: 4px double purple;
+                                 }"
+                           )
+                           ),
+                           br(),
+                           dataTableOutput("company_table"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("company_plothead"))),
+                           tags$h1(tags$style("#company_plothead{color : purple; font-size : 20px}", align = "center")),
+                           plotlyOutput("company_plot"),
+                           textOutput("company_error")
+                  ),
+
+
+                  tabPanel("Population Stability Index",
+                           fluidRow(column(12, align = "center", textOutput("percentile_tablehead"))),
+                           tags$h1(tags$style("#percentile_tablehead{color : purple; font-size : 20px", align = "center")),
+                           br(),
+                           dataTableOutput("percentile_table"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("psi_tablehead"))),
+                           tags$h1(tags$style("#psi_tablehead{color: purple; font-size : 20px}", align = "center")),
+                           br(),
+                           dataTableOutput("psi_table"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("factor_plothead"))),
+                           tags$h1(tags$style("#factor_plothead{color: purple; font-size : 20px", align = "center")),
+                           br(),
+                           plotlyOutput("factor_plot"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("stability_plothead"))),
+                           tags$h1(tags$style("#stability_plothead{color: purple; font-size : 20px}", align = "center")),
+                           br(),
+                           plotlyOutput("stability_plot")
+
+                  )
+                  ,
+
+                  #                  tabPanel("Macroeconomic Indicators",
+                  #                          fluidRow(column(12, align = "center", textOutput("macro_tablehead"))),
+                  #                         tags$h1(tags$style("#macro_tablehead{color : purple; font-size : 20px}", align = "center")),
+                  #                        br(),
+                  #                       dataTableOutput("macro_table"),
+                  #                      br(),
+                  #                     fluidRow(column(12, align = "center", textOutput("macro_plothead"))),
+                  #                    tags$h1(tags$style("#macro_plothead{color : purple; font-size : 20px}", align = "center")),
+                  #                   br(),
+                  #                  plotlyOutput("macro_plot")
+                  #        ),
+
+                  tabPanel("Data Quality Report",
+                           fluidRow(column(12, align = "center", textOutput("dq_header"))),
+                           tags$h1(tags$style("#dq_header{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("report_describe"))),
+                           br(),
+                           fluidRow(column(12, align = "center", downloadButton("report_download", "Generate Report")))
+                  )
+      ))
+  )
+}
+
+
+f_server_build <- function(def_table = t_definitions, final_table, joined_table){
+
+  ##--------------Shiny Server--------------------------------------------#
+  server <- function(input,output,session){
+
+    #--------------------------------- Sidepanels ------------------------------------------#
+    # Analysis Sidepanel
+    observeEvent(input$type,{
+      updateSelectInput(session,'variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$type])))
+    })
+
+    # Statistics sidepanel
+
+    observeEvent(input$statistics_type,{
+      updateSelectInput(session,'statistics_variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$statistics_type])))
+    })
+
+    #Outlier Sidepanel
+    observeEvent(input$type_outlier,{
+      updateSelectInput(session,'variable_outlier',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$type_outlier])))
+    })
+
+
+
+    #PSI Sidepanel
+    observeEvent(input$psi_type, {
+      updateSelectInput(session, 'psi_variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$psi_type])))
+    })
+    #-------------------------------------- Mains -----------------------------------------------#
+
+    ### Data Cleaning Tab ##
+    ## This will give the user the option to specify which company they want to remove based
+    ## on a missing % threshold
+    missing_req <- eventReactive(input$dq_button, {
+      input$dq_missing_req
+    })
+
+    companies_excluded <- reactive({
+      missing_comp <- final_table
+      missing_comp <- missing_comp %>%
+        group_by(symbol) %>%
+        summarise(missing = sum(is.na(value)),
+                  observations = n(),
+                  missing_pct = missing/observations)
+
+      if(!is.null(missing_req())){
+        excluded <- missing_comp$symbol[which(missing_comp$missing_pct >= missing_req())]
+      }else{
+        excluded <- NULL
+      }
+      excluded <- excluded
+    })
+
+
+    reshaped_master <- reactive({
+      missing_comp <- final_table
+
+      if(!is.null(missing_req())){
+        missing_comp <- final_table %>%
+          dplyr::filter(!(symbol %in% companies_excluded()))
+      }else{
+        missing_comp <- final_table
+      }
+      missing_comp <- missing_comp
+    })
+
+
+    df1_join_master <- reactive({
+      missing_comp <- joined_table
+
+      if(!is.null(missing_req())){
+        missing_comp <- joined_table %>%
+          dplyr::filter(!(symbol %in% companies_excluded()))
+      }else{
+        missing_comp <- joined_table
+      }
+      missing_comp <- missing_comp
+
+    })
+
+
+    df1_master <- reactive({
+      missing_comp <- df1_join_master()
+      missing_comp <- missing_comp[,c(1:(ncol(missing_comp) - 2))]
+
+      if(!is.null(missing_req())){
+        missing_comp <- missing_comp %>%
+          dplyr::filter(!(symbol %in% companies_excluded()))
+      }else{
+        missing_comp <- missing_comp
+      }
+      missing_comp <- missing_comp
+
+    })
+
+
+    output$company_missing_table <- DT::renderDataTable({
+
+      missing_comp <- reshaped_master()
+      missing_comp <- missing_comp %>%
+        group_by(symbol) %>%
+        summarise(missing = sum(is.na(value)),
+                  observations = n(),
+                  missing_pct = missing/observations)
+
+      missing_comp <- missing_comp
+
+      datatable(missing_comp, rownames = FALSE, class = 'cell-border stripe',filter = "top")
+
+    })
+
+    #----------------- Analysis main -------------#
+
+    #Make a reactive expression to make a graph of the metric over time
+    output$header <- reactive({
+
+      paste(gsub('[_]',' ',input$variable),"analysis")
+    })
+
+    output$Definition <- renderText({
+
+      paste("Definition")
+    })
+
+    define_table <- reactive({
+      t_definitons_filtered <- def_table
+      t_definitons_filtered <- subset(t_definitons_filtered, Name %in% input$company_variable)
+    })
+
+    output$definition <- renderText({
+
+      paste(define_table()[4])
+    })
+
+    output$ExpectedRiskDirection <- renderText({
+
+      paste("Expected Risk Direction")
+    })
+
+
+    output$riskdirection <- renderText({
+
+      paste(define_table()[5])
+    })
+
+    output$Formula <- renderText({
+
+      paste("Formula")
+    })
+
+    output$formula <- renderText({
+
+      paste(define_table()[3])
+    })
+
+
+    output$componenttable <- renderDataTable({
+
+
+      components <- data.frame(nrow = 7,ncol = 2)
+
+      for(i in 1:7){
+        if(!is.na(define_table()[5+i])){
+          components[i,1] <- define_table()[5+i]
+        }else{
+          components[i,1] <- NA
+        }
+      }
+
+      for(i in 1:7){
+        if(!is.na(define_table()[16+i])){
+          components[i,2] <- define_table()[16+i]
+        }else{
+          components[i,2] <- NA
+        }
+      }
+
+      components <- components[complete.cases(components[,1]),]
+
+      datatable(components,
+                colnames = c("Core Component","Core Component Definition"), rownames = FALSE,class = 'cell-border stripe')
+
+    })
+
+    output$subderivationtable <- renderDataTable({
+
+
+      components <- data.frame(nrow=3, ncol =1)
+
+      for(i in 1:3){
+        if(!is.na(define_table()[12+i])){
+          components[i,1] <- define_table()[12+i]
+        }else{
+          components[i,1] <- NA
+        }
+      }
+
+
+      components <- components[complete.cases(components[,1]),]
+
+      datatable(components,
+                colnames = c("Sub-Derivation", ""), rownames = FALSE, class = 'cell-border stripe')
+
+    })
+
+
+    output$FormulaFullFormat <- renderText({
+
+      paste("Formula (full format)")
+    })
+
+    output$fullformula <- renderText({
+
+      paste(define_table()[16])
+    })
+
+
+    t_variable_filtered <- reactive({
+      new_data <- reshaped_master()
+      new_data <- subset(new_data, variable %in% input$company_variable)
+      if(input$analysis_sector == "All") {
+        new_data <- new_data
+      }
+      else {
+        new_data <- subset(new_data, sector %in% input$company_sector)
+      }
+    })
+
+    output$financeplot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d")
+
+      t_plot <- t_variable_filtered()
+      t_plot <- t_plot %>%
+        group_by(date) %>%
+        summarise(perc_..05 = quantile(value, probs = c(.05), na.rm = TRUE),
+                  perc_.25 = quantile(value, probs = c(.25), na.rm = TRUE),
+                  perc_.5 = quantile(value, probs = c(0.5),na.rm = TRUE),
+                  perc_.75 = quantile(value, probs = c(.75), na.rm = TRUE),
+                  perc_.95 = quantile(value, probs = c(.95), na.rm = TRUE))
+
+      t_plot <- melt(t_plot, id.vars = "date")
+
+      ggplot(data = t_plot, aes(x = date, y = value, group = variable, color = variable))+
+        geom_line()+
+        geom_point() +
+        ggtitle(paste("Percentile movements of", input$variable, "for", input$analysis_sector)) +
+        xlab("Year")+
+        ylab("Value")+
+        scale_x_date(breaks = v_dates, date_labels = "%Y")+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+    })
+    #-------------Company and Sector Analysis----------------#
+
+    stats_df <- reactive({
+      t_filtered <- reshaped_master()
+      t_filtered <- subset(t_filtered, variable %in% input$statistics_variable)
+      if(input$statistics_sector == "All"){
+        t_filtered <- t_filtered
+      }else{
+        t_filtered <- subset(t_filtered, sector %in% input$statistics_sector)
+      }
+      t_filtered <- t_filtered
+      t_filtered <- t_filtered %>%
+        group_by(symbol) %>%
+        summarise(Minimum = #ifelse(is.na(
+                    round(min(value, na.rm = TRUE), digits = 2), #), paste(as.character("No data available")), min(value, na.rm = TRUE)),
+                  Average = round((sum(as.numeric(value),na.rm = TRUE) / length(as.numeric(value))), digits = 2),
+                  Maximum = #ifelse(is.na(
+                    round(max(value, na.rm = TRUE), digits = 2), #, paste(as.character("No data available")), max(value, na.rm = TRUE)),
+                  Missing_Count = sum(is.na(value)),
+                  Missing_percent = (sum(is.na(value)) / length(value)) , Number_of_observations = length(value))
+    })
+
+    output$tablehead <- reactive({
+
+      paste(gsub('[_]',' ',input$statistics_variable),"analysis for", gsub('[_]', ' ', input$statistics_sector))
+    })
+
+    stats_sector_df <- reactive({
+      stats_sector <- reshaped_master()
+      stats_sector <- subset(stats_sector, variable %in% input$statistics_variable)
+      if(input$statistics_sector == "All"){
+        stats_sector <- stats_sector
+      }else{
+        stats_sector <- subset(stats_sector, sector %in% input$statistics_sector)
+      }
+      stats_sector <- stats_sector %>%
+        summarise(Minimum = min(value, na.rm = TRUE), Average = (sum(as.numeric(value),na.rm=TRUE) / length(as.numeric(value))), Maximum = max(value, na.rm = TRUE),
+                  Missing_count = sum(is.na(value)), Missing_percent = round((sum(is.na(value)) / (sum(is.na(value)) + sum(!is.na(value)))),2),
+                  Number_of_observations = length(value))
+    })
+
+    output$stats <- renderDataTable({
+
+
+      t_stats<- stats_sector_df()
+      t_stats[,c(1:3)]<- round(t_stats[,c(1:3)],2) %>%
+        format( big.mark = ",",scientific = FALSE)
+      datatable(t_stats,options = list(dom = "fti"),rownames = FALSE,class = 'cell-border stripe')
+    })
+
+    output$stats_comphead <- renderText({
+
+      paste("Company Breakdown")
+    })
+
+    output$stats_comp <- renderDataTable({
+
+      average_fct <- stats_sector_df()
+
+      t_comp <- stats_df()
+      t_comp_1 <- t_comp[,c(2:7)]
+      t_comp_1 <- as.data.frame(t_comp_1)
+      t_comp_1 <- t_comp_1
+      t_comp_2 <- t_comp[,1]
+      t_comp <- cbind(t_comp_2,t_comp_1)
+      datatable(t_comp,rownames = FALSE,class = 'cell-border stripe')%>%
+        formatStyle(
+          'Average',
+          color = styleInterval(c(average_fct$Average), c('red','green')))
+    })
+
+    #-----------Outlier Analysis-----------------#
+
+    output$outlierhead <- renderText({
+
+      paste("Outlier anlaysis for", gsub('[_]', ' ', input$variable_outlier))
+    })
+
+    outlier_plot_table <- reactive({
+      outlier_df <- reshaped_master() %>%
+        filter(date %in% c(as.Date(paste(input$year_outlier[1],"12-31",sep="-")):as.Date(paste(input$year_outlier[2],"12-31",sep="-")))) %>%
+        filter(variable %in% input$variable_outlier)
+      if(input$outlier_sector == "All") {
+        outlier_df <- outlier_df
+      }
+      else {
+        outlier_df <- outlier_df %>%
+          filter(sector %in% input$outlier_sector)
+      }
+      outlier_df <- outlier_df
+    })
+
+    output$outlier_plot <- renderPlot({
+
+      t_outlier <- outlier_plot_table()
+      t_outlier <- t_outlier %>%
+        plot_outlier(value, col = "#663399")
+    })
+
+    output$outlier_tablehead <- renderText({
+
+      paste("Outlier breakdown for", gsub("[_]", " ", input$variable_outlier))
+    })
+
+    outlier_df <- reactive({
+      outlier_loaded <- reshaped_master()
+      outlier_loaded <- outlier_loaded %>% filter(variable %in% input$variable_outlier)
+      if(input$outlier_sector == "All") {
+        outlier_loaded <- outlier_loaded
+      }
+      else {
+        outlier_loaded <- outlier_loaded %>% filter(sector %in% input$outlier_sector)
+      }
+      outlier_loaded <- outlier_loaded %>%
+        filter(date %in% c(as.Date(paste(input$year_outlier[1],"12-31",sep="-")):as.Date(paste(input$year_outlier[2],"12-31",sep="-"))))
+      outlier_vector <- f_outliers(outlier_loaded)
+      outlier_dataframe <- data.frame(outlier_vector)
+      outlier_full <- inner_join(outlier_loaded, outlier_dataframe, by = "value")
+      outlier_final <- outlier_full[, c(1, 5)]
+    })
+
+    output$outlier_table <- renderDataTable({
+
+      datatable(outlier_df(),rownames = FALSE,class = 'cell-border stripe')
+    })
+
+    output$outlier_report <- downloadHandler(
+
+
+      filename = "report_outlier.html",
+
+      content = function(file) {
+
+        tempReport <- paste(getwd(), "/GT_quant_risk_0.1.0/GT_quant_risk/inst/rmarkdown/templates/report_outlier-rmd/skeleton/report_outlier.Rmd", sep = "")
+        file.copy("report_outlier.Rmd", tempReport, overwrite = TRUE)
+        params <- list(data1 = outlier_plot_table(),
+                       data2 = outlier_df())
+
+        rmarkdown::render(tempReport, output_file = file, params = params, envir = new.env(parent = globalenv()))
+
+      }
+    )
+
+
+
+    #----------- Visualisation main -------------#
+
+    data_frame <- reactive({
+
+      data <- df1_master()
+      data_join <- df1_join_master()
+
+      if(input$visualisation_sector == "All"){
+        data_f <- data[,-c(1,2)]
+        if(input$Visualisation_type == "All"){
+          data_f <- data_f
+        }
+        else {
+          tester <- reshaped_master() %>%
+            filter(Type %in% input$Visualisation_type)
+          names_keep <- sort(unique(tester$variable))
+          data_f <- data_f[, names_keep]
+        }
+      }
+      else {
+        data_f <- data_join[data_join$sector == input$visualisation_sector , 1:(length(data_join)-2)]
+        if(input$Visualisation_type == "All") {
+          data_f <- data_f[, -c(1,2)]
+        }
+        else {
+          tester <- reshaped_master() %>%
+            filter(Type %in% input$Visualisation_type)
+          names_keep <- sort(unique(tester$variable))
+          data_f <- data_f[, names_keep]
+        }
+      }
+      data_f <- data_f
+    })
+
+    output$corrhead <- renderText({
+
+      paste("Correlation Matrix")
+    })
+
+    output$corr <- renderPlotly({
+
+      t_data <- vis_cor(data_frame())
+      ggplotly(t_data, height = 800) %>%
+        layout(autosize=TRUE)
+    })
+
+    observe({
+      if(length(colnames(data_frame())) < 2) {
+
+        shinyjs::hide("corr")
+      }
+      else{
+        shinyjs::show("corr")
+      }
+    })
+
+    output$corr_error <- renderText({
+
+      paste("Unable to correlate, as only one ratio is included in this subset")
+    })
+
+    observe({
+      if(length(colnames(data_frame())) >= 2) {
+        shinyjs::hide("corr_error")
+      }
+      else{
+        shinyjs::show("corr_error")
+      }
+    })
+
+
+    #-------------- Overview & Missing main -----------------#
+
+
+    output$table_statshead <- renderText({
+
+      paste("Overall Statistical Analysis")
+    })
+
+    overview_df <- reactive({
+      over_view_df <- f_statistical_overview(input$overview_years[1],input$overview_years[2],df1_master())
+    })
+
+
+
+    output$table_stats <- DT::renderDataTable({
+
+      overview_datatable <- overview_df()
+      datatable(overview_datatable,rownames = FALSE,class = 'cell-border stripe')
+    })
+    output$missing_head <- renderText({
+
+      paste("Missing Analysis")
+    })
+
+    missing_df <- reactive({
+      loaded_date <- df1_master()
+      loaded_date <- loaded_date %>%
+        filter(date %in% c(as.Date(paste(input$overview_years[1], "12-31", sep = "-")) : as.Date(paste(input$overview_years[2], "12-31", sep = "-"))))
+    })
+
+    output$missing_plot <- renderPlotly({
+
+      gg_miss_var(missing_df()[, -c(1, 2)],show_pct = TRUE)})
+
+    output$overview_report <- downloadHandler(
+
+      filename = "report_overview.html",
+
+      content = function(file) {
+
+
+        tempReport <- paste(getwd(), "/GT_quant_risk_0.1.0/GT_quant_risk/inst/rmarkdown/templates/report_overview-rmd/skeleton/report_overview.Rmd", sep = "")
+        file.copy("report_overview.Rmd", tempReport, overwrite = TRUE)
+        params <- list(data1 = overview_df(),
+                       data2 = missing_df())
+
+        rmarkdown::render(tempReport, output_file = file, params = params, envir = new.env(parent = globalenv()))
+
+      }
+    )
+
+
+    #---------------------Company Breakdown--------------------------------#
+
+    observeEvent(input$company_sector,{
+      if (input$company_sector == "All") {
+        updateSelectInput(session,'company_symbol', choices=sort(unique(df1_join_master()[,"symbol"])))
+      }
+      else {
+        updateSelectInput(session,'company_symbol', choices=sort(unique(df1_join_master()[,"symbol"][df1_join_master()[,"sector"]==input$company_sector])))
+      }
+    })
+
+    observeEvent(input$company_type,{
+      updateSelectInput(session,'company_variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$company_type])))
+    })
+
+    output$companyhead <- renderText({
+
+      paste(gsub("[_]", " ", input$company_variable), "Analysis for", gsub("[_]", " ", input$company_symbol))
+    })
+
+    output$company_info <- renderText({
+
+      URL <- paste("https://www.marketwatch.com/investing/stock/",gsub(" US EQUITY","",input$company_symbol),"/historical?siteid=mktw&date=&x=22&y=7",sep="")
+
+      share_price <- URL %>%
+        read_html() %>%
+        html_nodes(".bgLast") %>%
+        html_text()
+
+      paste("Company Share Price",share_price[2],sep="    ")
+    })
+
+    output$company_table <- renderDataTable({
+
+      URL <- paste("https://www.marketwatch.com/investing/stock/",gsub(" US EQUITY","",input$company_symbol),sep="")
+
+      desc <- URL %>%
+        read_html() %>%
+        html_nodes(".kv__label") %>%
+        html_text()
+
+      value <- URL %>%
+        read_html() %>%
+        html_nodes(".kv__primary") %>%
+        html_text()
+
+      table <- data.frame(matrix(ncol = 2,nrow=16))
+
+      desc[1]
+      value[1]
+
+      for(i in 1:16){
+        table[i,1] <- desc[i]
+        table[i,2] <- value[i]
+      }
+
+      colnames(table) <- c("Metric","value")
+
+      datatable(table, rownames = FALSE,class = 'cell-border stripe')
+    })
+
+
+    company_df <- reactive({
+      t_company <- reshaped_master()
+      if (input$company_sector == "All") {
+        t_company <- t_company
+      }
+      else {
+        t_company <- t_company %>%
+          filter(sector %in% input$company_sector)
+      }
+      t_company <- t_company %>%
+        filter(symbol %in% input$company_symbol) %>%
+        filter(Type %in% input$company_type) %>%
+        filter(variable %in% input$company_variable)
+
+      t_company <- na.omit(t_company, cols = "value")
+    })
+
+    output$company_error <- renderText({
+
+      t_company <- company_df()
+      if(all(is.na(t_company$value))) {
+        paste("No data available")
+      }
+    })
+
+    output$company_plothead <- renderText({
+
+      paste(gsub("[_]", " ", input$company_variable), "Chart for", gsub("[_]", " ", input$company_symbol))
+    })
+
+    output$company_plot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d") # takes the filtered reactive df to get dates for the x axis.
+
+      company_plot_data <- company_df() # filtered df by the company selected for the ratio
+
+      ggplot(data = company_plot_data, aes(x= date, y = value)) +
+        geom_line(color = "purple") +
+        geom_point() +
+        scale_x_date(breaks = v_dates, date_labels = "%Y")
+    })
+
+    t_just_value <- reactive({
+      t_value_loaded <- company_df()
+      t_value_loaded <- t_value_loaded$value
+    })
+
+    observe({
+      if(all(is.na(t_just_value()))){
+        shinyjs::hide("company_plot")
+      }
+      else{
+        shinyjs::show("company_plot")
+      }
+    })
+
+
+    #--------------------Population Stability Index---------------------------#
+    output$percentile_tablehead <- renderText({
+
+      paste("Percentile Distribution for", gsub("[_]", " ", input$psi_variable))
+    })
+
+
+    percentages_quantiles_table <- reactive({
+      if(input$psi_calculation == "Base"){
+        percentage_table <- f_base_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"percentages")
+      }else{
+        percentage_table <- f_rolling_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"percentages")
+      }
+
+      percentage_table[,(2:ncol(percentage_table))] <- round(percentage_table[,(2:ncol(percentage_table))],2)
+      percentage_table <- percentage_table
+    })
+
+    output$percentile_table <- renderDataTable({
+
+      datatable(percentages_quantiles_table(), options = list(scrollx = TRUE),class = 'cell-border stripe',rownames = FALSE)
+    })
+
+
+    percentages_decile_table <- reactive({
+      if(input$psi_calculation == "Base"){
+        percentage_table <- f_base_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"values")
+      }else{
+        percentage_table <- f_rolling_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"values")
+      }
+
+      # percentage_table <- as.data.frame(percentage_table)
+      #percentage_table <- round(percentage_table,2)
+
+    })
+
+    output$psi_tablehead <- renderText({
+
+      paste("Percentile Distribution for", gsub("[_]", " ", input$psi_variable))
+    })
+
+    output$psi_table <- renderDataTable({
+
+      datatable(percentages_decile_table(),options = list(scrollX = TRUE),class = 'cell-border stripe',rownames = FALSE) %>%
+        formatStyle(
+          'PSI',
+          color = styleInterval(c(0.1,0.25), c('green','orange','red')))
+    })
+
+    output$factor_plothead <- renderText({
+
+      paste("% Tile Distribution across Time for", gsub("[_]", " ", input$psi_variable))
+    })
+
+    output$factor_plot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d")
+
+      decile_frame <- percentages_quantiles_table()
+      decile_clean <- melt(decile_frame, id.vars = "date")
+      ggplot(decile_clean, aes(x = date, y = value, group = variable, colour = variable)) +
+        geom_line() +
+        geom_point() +
+        xlab("Year") +
+        ylab("Value") +
+        scale_x_date(breaks = v_dates[(year(decile_clean[1,1])-year(v_dates[1])):length(v_dates)], date_labels = "%Y")
+    })
+
+    output$stability_plothead <- renderText({
+
+      paste("Stability of", gsub("[_]", " ", input$psi_variable), "Distribution")
+    })
+
+    output$stability_plot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d")
+
+      plot_psi <- percentages_decile_table()
+
+      ggplot(plot_psi, aes(x = date, y = PSI)) +
+        geom_point() +
+        geom_line(col = "purple") +
+        xlab("Year") +
+        ylab("Value")+
+        scale_x_date(breaks = v_dates[(year(plot_psi[1,1])-year(v_dates[1])+1):length(v_dates)], date_labels = "%Y")
+    })
+
+
+
+    ##################################################################################
+    #-----------------------------DQ-------------------------------------------------#
+
+    output$dq_header <- renderText({
+
+      paste("Data Quality Report")
+    })
+
+    output$report_describe <- renderText({
+
+
+    })
+
+    ## Reactive dataframe for the prupose of a data quality report
+    report_df <- reactive({
+
+      symbols_date <- df1_join_master()[,c(1,2)]      #Extracts the dates and symbols from full dataset
+      sectors <- as.data.frame(df1_join_master()[,46]) #Extracts the company sectors
+      colnames(sectors) <- "sector"
+
+
+      if(input$dq_type == "All Ratios") {
+        report_final <- df1_join_master()[,-47] ##Will keep dataset whole
+        if(input$dq_sector == "All"){
+          report_final <- report_final ##Will keep dataset whole
+        }
+        else {
+          report_final <- report_final %>%
+            filter(sector %in% input$dq_sector) ##Filters whole data by sector if specified
+        }
+      }
+
+      else {
+        index <- as.data.frame(unique(reshaped_master()[,c(4,6)])) ##Gathers unique ratio names and types of ratios
+
+        index_futher <- index %>%
+          filter(Type %in% input$dq_type) ##User inputs a ratio type
+
+        v_index <- c(index_futher[,1])  ## The ratios that correpsond to type chosen will be used to index the full dataframe
+
+        filtered <- as.data.frame(df1_join_master()[,v_index])
+        colnames(filtered) <- v_index
+        report_final <- cbind(symbols_date, sectors, filtered)
+        report_final <- report_final
+
+        if(input$dq_sector == "All"){
+          report_final <- report_final    ##No filter for sector
+        }
+        else {
+          report_final <- report_final %>%
+            filter(sector %in% input$dq_sector)    ## Filtered for sector
+        }
+      }
+
+      report_final <- report_final
+
+    })
+
+    ## Allows user to download a dq report based on their choice of type of ratio and sector they want to look at
+    output$report_download <- downloadHandler(
+
+      filename = "data_quality_report.html",
+
+      content = function(file) {
+        report_df_final <- report_df()
+        report_df_final <- report_df_final %>%
+          diagnose_web_report(output_format = "html", output_file = "data_quality_report.html") ## Produces full data quality report
+      }
+    )
+
+  }
+}
+
+###WOE Testing
+
+WOE_test <- function(inputcuts, inputdefault, variable) {
+
+  cuts <- read.csv(inputcuts)
+  test_cuts <- cuts[-1, ]
+  test_cuts <- test_cuts[test_cuts$variable == variable, ]
+  test_cuts$variable <- as.character(test_cuts$variable)
+  test_cuts$cut1 <- as.numeric(as.character(test_cuts$cut1))
+  test_cuts$cut2 <- as.numeric(as.character(test_cuts$cut2))
+  test_cuts$cut3 <- as.numeric(as.character(test_cuts$cut3))
+  test_cuts$cut4 <- as.numeric(as.character(test_cuts$cut4))
+  if(is.na(test_cuts$cut4) == TRUE){
+    v_cuts <- as.vector(unlist(test_cuts[, c(2:4)]))
+  }
+  else{
+    v_cuts <- as.vector(unlist(test_cuts[, c(2:5)]))
+  }
+
+  joined_adw <- read.csv(inputdefault)
+
+  joined_adw <- joined_adw[,c(2:46,60,62)]
+
+  joined_adw <- joined_adw %>%
+    mutate(default = ifelse(BB_1YR_DEFAULT_PROB >= 0.006,1,0))
+
+  joined_adw <- joined_adw[,-c(47)]
+
+  joined_adw <- joined_adw %>%
+    filter(!is.na(default))
+
+  colnames(joined_adw)[47] <- "target"
+
+  joined_adw <- joined_adw %>%
+    filter(!is.na(target))
+
+  joined_adw <- as.data.frame(joined_adw)
+  joined_adw$date <- as.Date(joined_adw$date, format = "%d/%m/%Y")
+
+  v_years <- c(unique(as.Date(joined_adw$date)))
+
+  final <- data.frame()
+
+  trend <- c(colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("trend")) == TRUE],
+             colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("average")) == TRUE],
+             colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("rate")) == TRUE])
+
+  if(variable %in% trend){
+    a<-2
+  }else{
+    a<-1
+  }
+
+  for(i in a:length(v_years)) {
+
+    assign(paste("bins", i, sep = "_"), smbinning.custom(joined_adw %>% filter(date == v_years[i]), y = "target",
+                                                         x = variable, cuts = v_cuts))
+
+    bins <- get(paste("bins", i, sep = "_"))
+
+    assign(paste("WoE", i, sep = "_"), bins$ivtable)
+
+    woes <- get(paste("WoE", i, sep = "_"))
+
+    woes <- woes %>%
+      mutate(woe_2 = ifelse(CntGood != 0,WoE, log(( 0.5 / CntGood[Cutpoint == "Total"])/(CntBad/CntBad[Cutpoint == "Total"]))))
+
+    if(is.na(test_cuts$cut4) == TRUE){
+      assign(paste("woe_final", i, sep = "_"), woes[1:4, c("Cutpoint", "woe_2")])
+    }
+    else{
+      assign(paste("woe_final", i, sep = "_"), woes[1:5, c("Cutpoint", "woe_2")])
+    }
+
+    if(is.na(test_cuts$cut4 == TRUE)){
+      years <- c(v_years[i], v_years[i], v_years[i], v_years[i])
+    }
+
+    else{
+      years <- c(v_years[i], v_years[i], v_years[i], v_years[i], v_years[i])
+    }
+
+    assign(paste("woe_years", i, sep = "_"), cbind(years, get(paste("woe_final", i, sep = "_"))))
+
+    final <- rbind(final,get(paste("woe_years", i, sep = "_")))
+  }
+  return(final)
+}
+
+
+IV_test_yearly <- function(inputcuts, inputdefault, variable) {
+
+  v_cuts <- as.numeric(inputcuts)
+
+  joined_adw <- inputdefault
+
+  joined_adw <- as.data.frame(joined_adw)
+
+  v_years <- c(unique(as.Date(joined_adw$date)))
+
+  v_years <- sort(v_years, decreasing=F)
+
+  final <- data.frame()
+
+  trend <- c(colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("trend")) == TRUE],
+             colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("average")) == TRUE],
+             colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("rate")) == TRUE])
+
+  if(variable %in% trend){
+    a <-2
+  }else{
+    a <-1
+  }
+
+  for(i in a:length(v_years)) {
+
+    assign(paste("bins", i, sep = "_"), smbinning.custom(joined_adw %>% filter(date == v_years[i]), y = "target",
+                                                         x = variable, cuts = as.numeric(v_cuts)))
+
+    bins <- get(paste("bins", i, sep = "_"))
+
+    assign(paste("IV", i, sep = "_"), bins$ivtable)
+
+    IVs <- get(paste("IV", i, sep = "_"))
+
+    IVs <- IVs %>%
+      mutate(IV_2 = ifelse(CntGood != 0,IV, round(abs((CntBad/CntBad[Cutpoint == "Total"] - 0.5/CntGood[Cutpoint == "Total"]) *
+                                                        (log(( 0.5 / CntGood[Cutpoint == "Total"])/(CntBad/CntBad[Cutpoint == "Total"])))), digits = 4)))
+
+    assign(paste("IV_final", i, sep = "_"), IVs[nrow(IVs), c("Cutpoint", "IV")])
+
+    assign(paste("IV_years", i, sep = "_"), cbind(v_years[i], get(paste("IV_final", i, sep = "_"))))
+
+    final <- rbind(final,get(paste("IV_years", i, sep = "_")))
+  }
+  return(final)
+}
+
+### WOE Transformation Function
+
+woe_trans <- function(variable, cuts, df) {
+
+  big_frame <- data.frame()
+
+  train_filt <- df[, c("date", variable, "target")]
+
+  cuts_model <- as.numeric(cuts)
+
+  length_cuts <- length(cuts_model)
+
+  train_filt <- as.data.frame(train_filt)
+
+  binned <- smbinning.custom(train_filt, y = "target", x = variable, cuts = cuts_model)
+
+  binned_table <- binned$ivtable
+
+  bands <- c(min(train_filt[,variable], na.rm = T), cuts_model, max(train_filt[,variable], na.rm = T))
+
+  binned_woe <- data.frame(seq(1:(length_cuts+2)),c(seq(1:(length_cuts+1)),NA),binned_table$WoE[1:(length_cuts+2)], seq(1:(nrow(binned_table) -1)))
+
+  binned_woe[,1] <- variable
+
+  colnames(binned_woe) <- c("variable", "bin", "woe")
+
+  blank <- data.frame(matrix(nrow = length(bands)-1,ncol=2))
+
+  for(k in 1:(length(bands)-1)){
+    blank[k,1] <- bands[k]
+    blank[k,2] <- bands[k+1]
+  }
+
+  blank <- rbind(blank,c(0,0))
+
+  data_needed <- cbind(binned_woe, blank)
+  colnames(data_needed) <- c("variable", "bin", "woe", "group", "min", "max")
+
+  big_frame <- rbind(big_frame, data_needed)
+
+
+  for(i in 1:nrow(train_filt)){
+    bin_total <- nrow(big_frame) - 1
+    for(k in 1:as.numeric(bin_total)){
+      if(is.na(train_filt[i,2])){
+        train_filt$woe[i] <- big_frame$woe[(bin_total+1)]
+      }
+      else if(between(train_filt[i,2],big_frame$min[k],big_frame$max[k])){
+        train_filt$woe[i] <- c(big_frame$woe)[k]
+      }
+      else {
+
+      }
+    }
+  }
+
+  train_filt$woe <- train_filt$woe *-1
+
+  data_needed$woe <- data_needed$woe * -1
+
+  for(i in 1:nrow(train_filt)){
+    for(j in 1:nrow(data_needed)) {
+      if(train_filt$woe[i] == data_needed$woe[j]) {
+        train_filt$group[i] <- data_needed$group[j]
+      }
+      else {
+
+      }
+    }
+  }
+
+  return(train_filt)
+
+}
+
+###
+woe_trans_other <- function(df1, df2, variable, var_cuts){
+
+  big_frame <- data.frame()
+
+  train_filt <- df1[, c("date", variable, "target")]
+
+  test_filt <- df2[, c("date", variable, "target")]
+
+  cuts_model <- as.numeric(var_cuts)
+
+  length_cuts <- length(cuts_model)
+
+  train_filt <- as.data.frame(train_filt)
+
+  binned <- smbinning.custom(train_filt, y = "target", x = variable, cuts = cuts_model)
+
+  binned_table <- binned$ivtable
+
+  bands <- c(min(test_filt[,variable], na.rm = T), cuts_model, max(test_filt[,variable], na.rm = T))
+
+  binned_woe <- data.frame(seq(1:(length_cuts+2)),c(seq(1:(length_cuts+1)),NA),binned_table$WoE[1:(length_cuts+2)], seq(1:(nrow(binned_table) -1)))
+
+  binned_woe[,1] <- variable
+
+  colnames(binned_woe) <- c("variable", "bin", "woe")
+
+  blank <- data.frame(matrix(nrow = length(bands)-1,ncol=2))
+
+  for(k in 1:(length(bands)-1)){
+    blank[k,1] <- bands[k]
+    blank[k,2] <- bands[k+1]
+  }
+
+  blank <- rbind(blank,c(0,0))
+
+  data_needed <- cbind(binned_woe, blank)
+  colnames(data_needed) <- c("variable", "bin", "woe", "group", "min", "max")
+
+  big_frame <- rbind(big_frame, data_needed)
+
+
+  for(i in 1:nrow(test_filt)){
+    bin_total <- nrow(big_frame) - 1
+    for(k in 1:as.numeric(bin_total)){
+      if(is.na(test_filt[i,2])){
+        test_filt$woe[i] <- big_frame$woe[(bin_total+1)]
+      }
+      else if(between(test_filt[i,2],big_frame$min[k],big_frame$max[k])){
+        test_filt$woe[i] <- c(big_frame$woe)[k]
+      }
+      else {
+
+      }
+    }
+  }
+
+  test_filt$woe <- test_filt$woe *-1
+
+  data_needed$woe <- data_needed$woe * -1
+
+  for(i in 1:nrow(test_filt)){
+    for(j in 1:nrow(data_needed)) {
+      if(test_filt$woe[i] == data_needed$woe[j]) {
+        test_filt$group[i] <- data_needed$group[j]
+      }
+      else {
+
+      }
+    }
+  }
+
+  return(test_filt)
+
+}
+
+## Gets the WOE over time for a factor
+
+WoE_test_yearly <- function(inputcuts , inputdefault , variable) {
+
+  v_cuts <- as.numeric(inputcuts)
+
+  joined_adw <- inputdefault
+
+  joined_adw <- as.data.frame(joined_adw)
+
+  v_years <- c(unique(as.Date(joined_adw$date)))
+
+  v_years <- sort(v_years, decreasing=F)
+
+  final <- data.frame()
+
+  trend <- c(colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("trend")) == TRUE],
+             colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("average")) == TRUE],
+             colnames(joined_adw)[str_detect(colnames(joined_adw), pattern =  c("rate")) == TRUE])
+
+  if(variable %in% trend){
+    a <-2
+  }else{
+    a <-1
+  }
+
+  for(i in a:length(v_years)) {
+
+    assign(paste("bins", i, sep = "_"), smbinning.custom(joined_adw %>% filter(date == v_years[i]), y = "target",
+                                                         x = variable, cuts = as.numeric(v_cuts)))
+
+    bins <- get(paste("bins", i, sep = "_"))
+
+    assign(paste("WoE", i, sep = "_"), bins$ivtable)
+
+    WoEs <- get(paste("WoE", i, sep = "_"))
+
+    WoEs <- WoEs %>%
+      mutate(WoE_2 = ifelse(CntGood != 0,WoE, round(log(( 0.5 / CntGood[Cutpoint == "Total"])/(CntBad/CntBad[Cutpoint == "Total"])), digits = 4)))
+
+
+    assign(paste("WoE_final", i, sep = "_"), WoEs[1:(nrow(WoEs)-2), c("Cutpoint", "WoE_2")])
+
+    assign(paste("WoE_years", i, sep = "_"), cbind(v_years[i], get(paste("WoE_final", i, sep = "_"))))
+
+    final <- rbind(final,get(paste("WoE_years", i, sep = "_")))
+  }
+  return(final)
+}
+
+
+##gini calculation
+
+gini_calc <- function(df) {
+
+  step_1 <- df %>% group_by(group) %>% summarise(default = sum(target),
+                                                 non_default = (n() - sum(target)))
+  library(janitor)
+  step_2 <- step_1 %>%
+    adorn_totals("row")
+
+  step_2$cum_dist_bads_less_scr <- c(cumsum(step_2$non_default[1:(nrow(step_2) - 1)]), NA)
+  step_2$cum_dist_bads_less_scr <- ((step_2$cum_dist_bads_less_scr/step_2$non_default[nrow(step_2)]))
+
+  step_2$cum_dist_bads_gr_scr <- c(rev(cumsum(rev(step_2$default[1:(nrow(step_2) - 1)]))), NA)
+  step_2$cum_dist_bads_gr_scr <- ((step_2$cum_dist_bads_gr_scr/step_2$default[nrow(step_2)]))
+
+  step_2$p_good_at_scr <- ((step_2$non_default/step_2$non_default[nrow(step_2)]))
+
+  step_2$diff_cum_dists <- (step_2$cum_dist_bads_gr_scr - step_2$cum_dist_bads_less_scr)
+
+  step_2$gini_increment <- (step_2$p_good_at_scr * step_2$diff_cum_dists)
+
+  gini <- round(sum(step_2$gini_increment[-nrow(step_2)]), digits = 3)
+
+  return(gini)
+}
+
+before_psi <- function(year,variable,bins,cut1,cut2= NA,cut3 = NA){
+
+  psi_data <- psi_train
+
+  psi_data$date <- as.Date(psi_data$date, format = "%d/%m/%Y")
+
+  psi_train <- psi_train %>%
+    select("date", variable, "target")
+
+  psi_data <- psi_train %>%
+    filter(date %in% v_years_2[year])
+
+  psi_data <- psi_data %>%
+    filter(!is.na(psi_data[,variable]))
+
+  if(bins == 3){
+    result <- smbinning.custom(psi_data, "target",variable,c(cut1,cut2))
+  }else if(bins == 2){
+    result <- smbinning.custom(psi_data, "target",variable,c(cut1))
+  }else{
+    result <- smbinning.custom(psi_data, "target",variable,c(cut1,cut2,cut3))
+  }
+  result <- result$ivtable
+
+  result <- result %>%
+    select(Cutpoint, PctRec, GoodRate) %>%
+    rename(BadRate = GoodRate)
+
+  result$Year <- v_years_2[year]
+
+  result <- result %>%
+    select(Year,Cutpoint,PctRec,BadRate)
+
+  result <- result
+
+  return(result)
+
+}
+
+psi_woe_bins <- function(data,bins,no_years){
+
+  psi_test_frame <- data
+
+  for(i in 1:nrow(psi_test_frame)){
+    for(j in 1:ncol(psi_test_frame)){
+      if(psi_test_frame[i,j] == 0){
+        psi_test_frame[i,j] <- 0.01
+      }else{
+        psi_test_frame[i,j] <- psi_test_frame[i,j]
+      }
+    }
+  }
+
+  act_exp <- data.frame(matrix(nrow = (no_years-1), ncol = (bins + 1)))
+
+  for(i in 2:(no_years)){
+    for(j in 2:(bins+1)){
+      act_exp[(i-1),j] <- psi_test_frame[1,j] - psi_test_frame[i,j]
+    }
+  }
+
+  act_exp[,1] <- psi_test_frame[c(2:no_years),1]
+  colnames(act_exp) <- colnames(psi_test_frame)
+
+  log_table <- data.frame(matrix(nrow = (no_years - 1),ncol=(bins+ 1)))
+
+  for(i in 2:no_years){
+    for(j in 2:(bins+1)){
+
+      log_table[(i-1),j] <- ifelse(!is.na(psi_test_frame[1,j] / psi_test_frame[i,j]), log((psi_test_frame[1,j] / psi_test_frame[i,j]),base = exp(1)),0)
+
+    }
+  }
+
+  log_table[,1] <- act_exp[,1]
+  colnames(log_table) <- colnames(act_exp)
+
+  psi_single <- log_table[,c(2:(bins+ 1))] * act_exp[,c(2:(bins+ 1))]
+
+  psi_final <- data.frame(rowSums(psi_single))
+
+  psi_dates <- v_years_2[2:no_years]
+
+  psi_final <- cbind(psi_dates,psi_final)
+
+  psi_final[,2] <- round(psi_final[,2],2)
+
+  colnames(psi_final) <- c("date","PSI")
+
+  psi_final <- psi_final
+
+  return(psi_final)
+}
+
+f_ui_SFA <- function(){
+
+  ui <- dashboardPage(
+    dashboardHeader(title = "Single Factor Analysis Tool"),
+
+    dashboardSidebar(width = 320,
+                     sidebarMenu(id="tPanel",style="overflow-y:scroll; position:fixed; top:0; bottom:0;",
+                                 selectInput("factor",
+                                             "Choose a Factor:",
+                                             choices = choices),
+                                 selectInput("method", "Choose Binning Method:",
+                                             choices = c("Optimal","Quantile", "Manual","Stored Cuts")),
+                                 fluidRow(column(12, align = "center",
+                                                 actionButton("add5", "Add this variable"),
+                                                 downloadButton("download_data", "Download CSV"))),
+                                 conditionalPanel(
+                                   condition = "input.method == 'Stored Cuts'",
+                                   sliderInput("csv_slider","Choose stored cut", min = 1, max = 5,step = 1, value = 1)
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.method == 'Quantile'",
+                                   sliderInput("bin", "Number of Bins:", min = 3, max = 4, value = 3, step = 1)
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.bin == '3' && (input.method == 'Quantile')",
+                                   noUiSliderInput(
+                                     inputId = "bins_3", label = "Adjust binwidth:",
+                                     min = 0, max = 100,
+                                     value = c(33,66),
+                                     orientation = "horizontal", width = 350,
+                                     color = "#68228B")
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.bin == '4'&& (input.method == 'Quantile')",
+                                   noUiSliderInput(
+                                     inputId = "bins_4", label = "Adjust binwidth:",
+                                     min = 0, max = 100,
+                                     value = c(25,50,75),
+                                     orientation = "horizontal", width = 350,
+                                     color = "#68228B")
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.method == 'Manual'",
+                                   sliderInput("no_bins", "Number of Bins", min = 3, max = 4, step = 0.5, value = 3),
+                                   selectInput("spearman","Must be monotonic?",choices = c("Yes","No")),
+                                   sliderInput("cut_choice", "Select recommended cut", min = 1,max=5,value = 1,step = 1)
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.method == 'Manual'",
+                                   sliderInput("cut1", "Choose first cut", value = 0, min = 0, max = 100, step = 1), #value null
+                                   sliderInput("cut2", "Choose second cut", value = 0, min = 0, max = 100, step = 1) #value null
+
+                                 ),
+                                 conditionalPanel(
+                                   condition = "input.no_bins == '4' && (input.method == 'Manual')",
+                                   sliderInput("cut3", "Choose third cut", value = 0, min = 0, max = 100, step = 1) #value null
+                                 )
+                     )
+    ),
+
+    dashboardBody(
+      useShinyjs(),
+      tabsetPanel(type = "tabs",
+                  id = "tabs",
+                  tabPanel("Binning",
+                           fluidRow(column(12, align = "center",
+                                           textOutput("header"))),
+
+                           hidden(
+                             div(id = 'text_div',
+                                 verbatimTextOutput("text")
+                             )
+                           ),
+                           tags$b(tags$style("#text{color : purple; font-size: 30px;}")),
+
+                           tags$br(),
+
+                           fluidRow(column(12,
+                                           "", fixedRow(column(3,
+                                                               textOutput("Definition")),
+                                                        column(9,
+                                                               textOutput("definition"))
+                                           ))),
+
+                           tags$h1(tags$style("#header{color : purple; font-size: 20px;}")),
+                           tags$h3(tags$style("#Definition{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#definition{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+                           br(),
+                           br(),
+
+                           fluidRow(column(12,
+                                           "", fluidRow(column(3,
+                                                               textOutput("ExpectedRiskDirection")),
+                                                        selectInput("risk_dir_choice","Choose Risk Direction", choices = c("Upwards","U-Shaped","n-shaped","Downwards")),
+                                                        column(9,
+                                                               textOutput("riskdirection"))
+                                           ))),
+
+                           tags$h3(tags$style("#ExpectedRiskDirection{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#riskdirection{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+                           br(),
+                           br(),
+
+                           fluidRow(column(12,
+                                           "",fluidRow(column(3,
+                                                              textOutput("Formula")),
+                                                       column(9,
+                                                              textOutput("formula"))
+                                           ))),
+
+                           tags$h3(tags$style("#Formula{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#formula{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+
+
+                           br(),
+                           br(),
+
+                           DT::dataTableOutput("componenttable"),
+
+
+                           br(),
+                           br(),
+
+
+                           fluidRow(column(12,
+                                           "",fluidRow(column(3,
+                                                              textOutput("FormulaFullFormat")),
+                                                       column(9,
+                                                              textOutput("fullformula"))
+                                           ))),
+
+                           tags$h3(tags$style("#FormulaFullFormat{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#fullformula{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+                           tags$hr(style="border-color: black;"),
+                           br(),
+
+                           br(),
+                           br(),
+
+                           fluidRow(column(12, align = "center", textOutput("iv_table_head"))),
+                           tags$h3(tags$style("#iv_table_head{color : purple; font-size: 20px}")),
+                           br(),
+                           DT::dataTableOutput("bin_choice"),
+                           DT::dataTableOutput("stored_table"),
+                           br(),
+                           DT::dataTableOutput("iv_table"),
+                           fluidRow(column(12, align = "center", textOutput("iv_error"))),
+                           tags$h3(tags$style("#iv_error{color : purple; font-size: 22px}")),
+                           br(),
+                           tags$hr(style="border-color: black;"),
+                           br(),
+                           plotOutput("woeplot"),
+                           fluidRow(column(12, align = "center", textOutput("woeplot_error"))),
+                           tags$h3(tags$style("#woeplot_error{color : purple; font-size: 22px}")),
+                           br(),
+                           DT::dataTableOutput("test_table"),
+                           tags$hr(style="border-color: black;"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("iv_ginihead"))),
+                           tags$h3(tags$style("#iv_ginihead{color : purple; font-size: 20px}")),
+
+                           DT::dataTableOutput("iv_ginioverall"),
+                           fluidRow(column(12, align = "center", textOutput("iv_ginioverallerror"))),
+                           tags$h2(tags$style("#iv_ginioverallerror{color : purple; font-size: 22px}")),
+
+                           br(),
+                           tags$hr(style="border-color: black;"),
+                           br()
+                           # sliderInput("bin_number", "Select Number of bins:",
+                           #             min = 1, max = 100, value = 30),
+                           # plotlyOutput("frequency")
+
+
+                  ),
+
+                  tabPanel("Testing",
+                           plotlyOutput("iv_gini_plot"),
+                           fluidRow(column(12, align = "center", textOutput("iv_ploterror"))),
+                           tags$h2(tags$style("#iv_ploterror{color : purple; font-size: 22px}")),
+
+                           br(),
+                           tags$hr(style="border-color: black;"),
+                           br(),
+
+                           plotlyOutput("WoE_plot"),
+                           fluidRow(column(12, align = "center", textOutput("WoE_ploterror"))),
+                           tags$h2(tags$style("#WoE_ploterror{color : purple; font-size: 22px}")),
+                           br(),
+                           DT::dataTableOutput("stability_table"),
+                           br(),
+                           tags$hr(style="border-color: black;"),
+                           br(),
+                           plotOutput("stability_plot"),
+                           br(),
+                           tags$hr(style="border-color: black;"),
+                           br(),
+                           DT::dataTableOutput("psi_table"),
+                           br(),
+                           tags$hr(style="border-color: black;"),
+                           br(),
+                           plotOutput("psi_plot"),
+                           DT::dataTableOutput("final_score_table")
+                  ))))
+
+
+}
+
+
+f_server_SFA <- function(input_data,definitions){
+
+  server <- function(input, output, session) {
+    output$header <- reactive({
+      paste(gsub('[_]',' ',input$factor))
+    })
+
+    output$Definition <- renderText({
+      paste("Definition")
+    })
+
+    define_table <- reactive({
+      t_definitons_filtered <- definitions
+      t_definitons_filtered <- subset(t_definitons_filtered, Name %in% input$factor)
+    })
+
+    output$definition <- renderText({
+      paste(define_table()[4])
+    })
+
+    output$ExpectedRiskDirection <- renderText({
+      paste("Expected Risk Direction")
+    })
+
+
+    output$riskdirection <- renderText({
+      paste(define_table()[5])
+    })
+
+    output$Formula <- renderText({
+      paste("Formula")
+    })
+
+    output$formula <- renderText({
+      paste(define_table()[3])
+    })
+
+
+    output$componenttable <- DT::renderDataTable({
+
+      components <- data.frame(nrow = 7,ncol = 2)
+
+      for(i in 1:7){
+        if(!is.na(define_table()[5+i])){
+          components[i,1] <- define_table()[5+i]
+        }else{
+          components[i,1] <- NA
+        }
+      }
+
+      for(i in 1:3){
+        if(!is.na(define_table()[12+i])){
+          components[i,2] <- define_table()[12+i]
+        }else{
+          components[i,2] <- NA
+        }
+      }
+
+      components <- components[complete.cases(components[,1]),]
+
+      datatable(components,
+                colnames = c("Core Component","Sub-Derivation"), options = list(dom = 'ft',columnDefs = list(list(className = 'dt-center'))),
+                rownames = FALSE,class = 'cell-border stripe')
+
+    })
+
+    output$FormulaFullFormat <- renderText({
+      paste("Formula (full format)")
+    })
+
+    output$fullformula <- renderText({
+      paste(define_table()[16])
+    })
+
+    react_3 <- eventReactive(input$bins_3, {
+      one <- input$bins_3[1]
+      two <- input$bins_3[2]
+
+      vector <- c(one, two)
+    })
+
+    react_4 <- eventReactive(input$bins_4,{
+
+      one <- input$bins_4[1]
+      two <- input$bins_4[2]
+      three <- input$bins_4[3]
+
+      vector <- c(one, two, three)
+      return(vector)
+    })
+
+    test <- reactive({
+      sort_test <- c(input_data[,input$factor])
+      sort_test <- as.numeric(unlist(sort_test))
+      sort_test <- sort(sort_test)
+    })
+
+    matrix_reactive <- reactive({
+
+      if(input$no_bins == 3){
+
+        matrix_df  <- readr::read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/Binning Tool/Shiny/optimal_3.csv")
+
+
+      }else if(input$no_bins == 4){
+
+        matrix_df <- readr::read_csv("//fs02/RAS/Quantitative Risk/dev-tools/modules/Binning Tool/Shiny/optimal_4.csv")
+      }else{
+
+      }
+
+      matrix_df$Variable <- as.character(matrix_df$Variable)
+      matrix_df$Spearman <- matrix_df$Spearman * - 1
+      matrix_df <- matrix_df[,-1]
+
+    })
+
+    cuts_table <- reactive({
+
+      data_frame <- matrix_reactive() %>%
+        filter(Variable %in% input$factor)
+
+      data_frame <- data_frame
+
+      if(input$spearman == "Yes"){
+        data_frame <- data_frame %>%
+          filter(Spearman %in% c(-1,1))
+      }else{
+        data_frame <- data_frame
+      }
+      data_frame <- data_frame %>%
+        arrange(desc(IV))
+
+      data_frame <- data_frame[c(1:5),]
+    })
+
+    output$bin_choice <- DT::renderDataTable({
+
+      data <- cuts_table()
+
+      data <- data
+
+      DT::datatable(data)
+    })
+
+    observe({
+      if(input$method == "Manual"){
+        shinyjs::show("bin_choice")
+      }else{
+        shinyjs::hide("bin_choice")
+      }
+    })
+
+    cuts_2 <- reactive({
+
+      data <- cuts_table()
+
+      if(input$no_bins == 3){
+        v_cuts <- c(as.numeric(data[input$cut_choice,4]),  as.numeric(data[input$cut_choice,5]))
+      }
+      else{
+        v_cuts <- c(as.numeric(data[input$cut_choice,4]),  as.numeric(data[input$cut_choice,5]) ,
+                    as.numeric(data[input$cut_choice,6]))
+      }
+
+      v_cuts <- v_cuts
+
+    })
+
+    observeEvent(input$cut_choice,{
+
+
+      updateSliderInput(session = session, inputId = "cut1", value = cuts_2()[1])
+      updateSliderInput(session = session, inputId = "cut2", value = cuts_2()[2])
+      updateSliderInput(session = session, inputId = "cut3", value = cuts_2()[3])
+
+
+    })
+
+    cuts <- reactive({
+      if(input$method == "Quantile"){
+        if(input$bin == 3){
+          v_cuts <- c(test()[length(test()) * (react_3()[1] / 100)], test()[length(test()) * (react_3()[2] / 100)])
+        }
+        else{
+          v_cuts <- c(test()[length(test()) * (react_4()[1] / 100)], test()[length(test()) * (react_4()[2] / 100)],
+                      test()[length(test()) * (react_4()[3] / 100)])
+        }
+      }else{
+
+        if(input$no_bins == 3){
+          v_cuts <- c(test()[length(test()) * (input$cut1 / 100)], test()[length(test()) * (input$cut2 / 100)])
+        }
+        else{
+          v_cuts <- c(test()[length(test()) * (input$cut1 / 100)], test()[length(test()) * (input$cut2 / 100)],
+                      test()[length(test()) * (input$cut3 / 100)])
+        }
+        v_cuts <- v_cuts
+      }
+    })
+
+    opt_cuts <- reactive({
+      opt_cuts <- previous_cuts
+      cuts <- opt_cuts[opt_cuts$V1 == input$factor, ]
+      cuts <- cuts
+      cuts <- cuts[input$csv_slider,c(2:4)]
+      new <- as.vector(cuts)
+      final <- new[!is.na(new)]
+      final <- final
+    })
+
+    previous_cuts_r <- reactive({
+      stored <- previous_cuts
+      stored_1 <- stored[stored$V1 == input$factor, ]
+      stored_2 <- stored_1[1:5, ]
+      stored_3 <- stored_2
+    })
+
+    output$stored_table <- DT::renderDataTable({
+      stored_cuts <- previous_cuts_r()
+      DT::datatable(stored_cuts)
+    })
+
+    observe({
+      if(input$method == "Stored Cuts"){
+        shinyjs::show("stored_table")
+      }else{
+        shinyjs::hide("stored_table")
+      }
+    })
+
+
+    binning <- reactive({
+      if(input$method == "Optimal") {
+        bins <- smbinning(input_data, y = "target", x = input$factor)$ivtable
+      }else if(input$method == "Stored Cuts"){
+        bins <- smbinning.custom(input_data, y = "target", x = input$factor, cuts = opt_cuts())$ivtable
+      } else {
+        bins <- smbinning.custom(input_data, y = "target", x = input$factor, cuts = cuts())$ivtable
+      }
+
+      bins <- bins
+      colnames(bins) <- c("Cutpoint", "CntRec", "CntBad", "CntGood", "CntCumRec", "CntCumBad", "CntCumGood", "PctRec", "BadRate", "GoodRate",
+                          "Odds", "LnOdds", "WoE", "IV")
+      bins$WoE <- (bins$WoE * -1)
+      bins <- bins
+    })
+
+    output$iv_table_head <- renderText({
+      paste(gsub('[_]',' ',input$factor), " Information Table")
+    })
+
+    output$iv_table <- DT::renderDataTable({
+      bins <- binning()
+      DT::datatable(bins)
+    })
+
+    cuts_df <- reactive({
+      content <- c(input$factor, cuts()[1],cuts()[2],ifelse(!is.na(cuts()[3]),cuts()[3],NA))
+    })
+
+    # Add these cuts to the empty cvs file
+
+    stored_cuts <- eventReactive(input$add5, {
+      blank <<- rbind(blank, cuts_df())
+    })
+
+    output$download_data <- downloadHandler(
+      filename = "binning.csv",
+      content = function(file) {
+        write.csv(blank, file, row.names = FALSE)
+      })
+
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) == "No significant splits")) {
+
+        shinyjs::hide("iv_table")
+      }
+      else{
+        shinyjs::show("iv_table")
+      }
+    })
+
+    output$iv_error <- renderText({
+
+      paste("Unable to bin, No Significant splits")
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) != "No significant splits")) {
+        shinyjs::hide("iv_error")
+      }
+      else if(input$method == "Quantile" | input$method == "Manual" | input$method == "Stored Cuts"){
+        shinyjs::hide("iv_error")
+      }
+      else {
+        shinyjs::show("iv_error")
+      }
+    })
+
+    output$woeplot <- renderPlot({
+
+      if(input$method == "Optimal" | input$method == "Stored Cuts") {
+
+        g <-ggplot(data = binning()[(1:(nrow(binning()) - 2)),], aes(x = factor(Cutpoint, levels = Cutpoint[1:(nrow(binning()) - 2)]), y = (PctRec * 100), fill = "Green"))  +
+          geom_bar(color = "Green", stat = "identity") +
+          geom_line(data = binning()[(1:(nrow(binning()) - 2)),], aes(x = Cutpoint, y = (BadRate * 100), group = 1,color = "Darkorange")) +
+          geom_line(data = binning()[(1:(nrow(binning()) - 2)),], aes(x = Cutpoint, y = (WoE * 100), group = 1, color = "Red"))+
+          ylab("Percentage Level") +
+          scale_y_continuous("Percentage Level", sec.axis = sec_axis(~./100, name = "WOE"))+
+          ggtitle("WoE Bin Breakdown") +
+          xlab("Group") +
+          geom_point(data = binning()[(1:(nrow(binning()) - 2)),], aes(x = Cutpoint, y = (BadRate * 100), color = "Darkorange"))+
+          geom_point(data = binning()[(1:(nrow(binning()) - 2)),], aes(x = Cutpoint, y = (WoE * 100), color = "Red"))
+
+      } else if(input$method == "Quantile") {
+        g <- ggplot(data = binning()[(1:input$bin),], aes(x = factor(Cutpoint, levels = Cutpoint[1:input$bin]), y = (PctRec * 100), fill = "Green"))  +
+          geom_bar(color = "Green", stat = "identity") +
+          geom_line(data = binning()[(1:input$bin),], aes(x = Cutpoint, y = (BadRate * 100), group = 1,color = "Darkorange")) +
+          geom_line(data = binning()[(1:input$bin),], aes(x = Cutpoint, y = (WoE * 100), group = 1, color = "Red"))+
+          ylab("Percentage Level") +
+          scale_y_continuous("Percentage Level", sec.axis = sec_axis(~./100, name = "WOE"))+
+          ggtitle("WoE Bin Breakdown") +
+          xlab("Group") +
+          ggtitle("WoE Bin Breakdown") +
+          xlab("Group") +
+          geom_point(data = binning()[(1:input$bin),], aes(x = Cutpoint, y = (BadRate * 100), color = "Darkorange"))+
+          geom_point(data = binning()[(1:input$bin),], aes(x = Cutpoint, y = (WoE * 100), color = "Red"))
+
+      }else{
+
+        g <- ggplot(data = binning()[(1:input$no_bins),], aes(x = factor(Cutpoint, levels = Cutpoint[1:input$no_bins]), y = (PctRec * 100), fill = "Green"))  +
+          geom_bar(color = "Green", stat = "identity") +
+          geom_line(data = binning()[(1:input$no_bins),], aes(x = Cutpoint, y = (BadRate * 100), group = 1,color = "Darkorange")) +
+          geom_line(data = binning()[(1:input$no_bins),], aes(x = Cutpoint, y = (WoE * 100), group = 1, color = "Red"))+
+          ylab("Percentage Level") +
+          scale_y_continuous("Percentage Level", sec.axis = sec_axis(~./100, name = "WOE"))+
+          ggtitle("WoE Bin Breakdown") +
+          xlab("Group") +
+          geom_point(data = binning()[(1:input$no_bins),], aes(x = Cutpoint, y = (BadRate * 100), color = "Darkorange"))+
+          geom_point(data = binning()[(1:input$no_bins),], aes(x = Cutpoint, y = (WoE * 100), color = "Red"))
+
+      }
+
+      g + scale_color_manual(name = "", values = c("Darkorange"="Darkorange", "Red" = "Red"), labels = c("BadRate", "WoE")) +
+        scale_fill_manual("Percentage of Population", values = alpha(c("Green"),.3))+
+        theme(strip.background =element_rect(fill="white"))+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) == "No significant splits")) {
+
+        shinyjs::hide("woeplot")
+      }
+      else{
+        shinyjs::show("woeplot")
+      }
+    })
+
+    output$woeplot_error <- renderText({
+
+      paste("Unable to bin, No Significant splits")
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) != "No significant splits")) {
+        shinyjs::hide("woeplot_error")
+      }
+      else if(input$method == "Quantile" | input$method == "Manual" | input$method == "Stored Cuts"){
+        shinyjs::hide("woeplot_error")
+      }
+      else {
+        shinyjs::show("WoE_ploterror")
+      }
+    })
+
+    output$test_table <- DT::renderDataTable({
+      DT::datatable(stored_cuts())
+    })
+
+
+    gini_full <- reactive({
+      cuts_n <- cuts_react()
+      trans <- woe_trans(input$factor, cuts_n, input_data)
+      trans <- trans
+
+
+      #subsetting data to specific year and variable
+
+
+
+      #getting gini coefficients for each bin of this data into single vector
+      gini <- round(gini_calc(trans), digits = 4)
+      gini <- gini
+    })
+
+    output$iv_ginihead <- renderText({
+      paste("Overall values for", input$factor)
+    })
+
+    output$iv_ginioverall <- DT::renderDataTable({
+      bins <- binning()
+      iv <- bins[nrow(bins), "IV"]
+      gini <- gini_full()
+      metrics <- data.frame(matrix(ncol = 2, nrow = 1))
+      colnames(metrics) <- c("IV", "Gini")
+      metrics[1,1] <- iv
+      metrics[1,2] <- gini
+
+      DT::datatable(metrics)
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) == "No significant splits")) {
+
+        shinyjs::hide("iv_ginioverall")
+      }
+      else{
+        shinyjs::show("iv_ginioverall")
+      }
+    })
+
+    output$iv_ginioverallerror <- renderText({
+
+      paste("Unable to bin, No Significant splits")
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) != "No significant splits")) {
+        shinyjs::hide("iv_ginioverallerror")
+      }
+      else if(input$method == "Quantile" | input$method == "Manual" | input$method == "Stored Cuts"){
+        shinyjs::hide("iv_ginioverallerror")
+      }
+      else {
+        shinyjs::show("iv_ginioverallerror")
+      }
+    })
+
+
+    cuts_react <- reactive({
+      if(input$method == "Optimal") {
+        bins <- smbinning(input_data, y = "target", x = input$factor)$ivtable
+      }else if(input$method == "Stored Cuts"){
+        bins <- smbinning.custom(input_data, y = "target", x = input$factor, cuts = opt_cuts())$ivtable
+      }else {
+        bins <- smbinning.custom(input_data, y = "target", x = input$factor, cuts = cuts())$ivtable
+      }
+      bins <- bins
+
+      cuts <- c(bins$Cutpoint)
+
+      cuts_n <- c()
+
+      for(i in 1:(length(cuts) - 3)) {
+        cuts_n <- c(cuts_n, str_extract(cuts[i], "\\d+\\.*\\d*"))
+      }
+
+      cuts_n <- cuts_n
+    })
+
+
+
+
+    iv_time <- reactive({
+      cuts_n <- cuts_react()
+
+      IV_full <- GTquantrisk::IV_test_yearly(cuts_n, input_data, input$factor)
+      colnames(IV_full) <- c("date", "cutpoint", "IV")
+
+      IV_full <- IV_full
+
+    })
+
+    gini_time <- reactive({
+      cuts_n <- cuts_react()
+      trans <- woe_trans(input$factor, cuts_n, input_data)
+      trans <- trans
+      v_years <- c(unique(as.Date(trans$date)))
+      v_years <- sort(v_years, decreasing=F)
+
+      final <- data.frame()
+
+      trend <- c(colnames(input_data)[str_detect(colnames(input_data), pattern =  c("trend")) == TRUE],
+                 colnames(input_data)[str_detect(colnames(input_data), pattern =  c("average")) == TRUE],
+                 colnames(input_data)[str_detect(colnames(input_data), pattern =  c("rate")) == TRUE])
+
+
+      v_years <- c(unique(as.Date(trans$date)))
+      v_years <- sort(v_years, decreasing=F)
+
+      if(input$factor %in% trend) {
+        v_years <- v_years[-1]
+      }
+      else {
+        v_years <- v_years
+      }
+
+      v_years <- v_years
+
+      for(i in 1:length(v_years)){
+
+        #subsetting data to specific year and variable
+        data_1 <- trans %>% filter(date == v_years[i])
+
+
+        #getting gini coefficients for each bin of this data into single vector
+        assign(paste("gini", i, sep = "_"),round(gini_calc(data_1), digits = 4))
+
+        final <- rbind(final,get(paste("gini", i, sep = "_")))
+      }
+      final <- cbind(v_years, final)
+
+      final <- final
+      colnames(final) <- c("date", "gini")
+      final <- final
+    })
+
+
+
+
+    output$iv_gini_plot <- renderPlotly({
+      df <- iv_time()
+      df_2 <- gini_time()
+      final <- left_join(df, df_2, by = c("date" = "date"))
+      colnames(final) <- c("date","cuts", "IV", "gini")
+      final <- final[, c("date", "IV", "gini")]
+      final <- melt(final, id.vars = "date")
+
+      ggplotly(ggplot(final, aes(x = date, y = value, group = variable, color = variable)) +
+                 geom_line() +
+                 geom_point() +
+                 ylab("IV") +
+                 ggtitle(paste("IV & Gini of", input$factor)) +
+                 scale_y_continuous("IV", sec.axis = sec_axis(~./10, name = "Gini")) +
+                 theme(panel.background = element_rect(fill="white",
+                                                       size = 2, linetype = "solid"),
+                       plot.title = element_text(face = "bold.italic",hjust = 0.5),
+                       axis.title.x = element_text(face = "bold.italic"),
+                       axis.title.y = element_text(face = "bold.italic"),
+                       plot.background = element_rect(fill = "white"),
+                       panel.grid.major.y = element_line(color="grey"),
+                       panel.grid.minor.y = element_line(color="grey"),
+                       panel.border=element_rect(colour="black",fill=NA,size=1)))
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) == "No significant splits")) {
+
+        shinyjs::hide("iv_gini_plot")
+      }
+      else{
+        shinyjs::show("iv_gini_plot")
+      }
+    })
+
+    output$iv_ploterror <- renderText({
+
+      paste("Unable to bin, No Significant splits")
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) != "No significant splits")) {
+        shinyjs::hide("iv_ploterror")
+      }
+      else if(input$method == "Quantile" | input$method == "Manual" | input$method == "Stored Cuts"){
+        shinyjs::hide("iv_ploterror")
+      }
+      else {
+        shinyjs::show("iv_ploterror")
+      }
+    })
+
+    WoE_time <- reactive({
+
+      WoE_cuts_n <- cuts_react()
+
+      WoE_full <- WoE_test_yearly(WoE_cuts_n, input_data, input$factor)
+      colnames(WoE_full) <- c("date", "cutpoint", "WoE")
+
+      WoE_full <- WoE_full
+
+    })
+
+    output$WoE_plot <- renderPlotly({
+      df <- WoE_time()
+      ggplotly(ggplot(df, aes(x=date, y = WoE, fill=factor(cutpoint))) +
+                 geom_bar(stat = "identity", position ="dodge") +
+                 ggtitle("WoE Grouping per year") +
+                 theme(panel.background = element_rect(fill="white",
+                                                       size = 2, linetype = "solid"),
+                       plot.title = element_text(face = "bold.italic",hjust = 0.5),
+                       axis.title.x = element_text(face = "bold.italic"),
+                       axis.title.y = element_text(face = "bold.italic"),
+                       plot.background = element_rect(fill = "white"),
+                       panel.grid.major.y = element_line(color="grey"),
+                       panel.grid.minor.y = element_line(color="grey"),
+                       panel.border=element_rect(colour="black",fill=NA,size=1)))
+
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) == "No significant splits")) {
+
+        shinyjs::hide("WoE_plot")
+      }
+      else{
+        shinyjs::show("WoE_plot")
+      }
+    })
+
+    output$WoE_ploterror <- renderText({
+
+      paste("Unable to bin, No Significant splits")
+    })
+
+    observe({
+      if((input$method == "Optimal") & (smbinning(input_data, y = "target", x = input$factor) != "No significant splits")) {
+        shinyjs::hide("WoE_ploterror")
+      }
+      else if(input$method == "Quantile" | input$method == "Manual" | input$method == "Stored Cuts"){
+        shinyjs::hide("WoE_ploterror")
+      }
+      else {
+        shinyjs::show("WoE_ploterror")
+      }
+    })
+
+
+    ####   NEW   ####
+
+    stability_data_raw <- reactive({
+
+      if(input$method == "Optimal"){
+
+        if((nrow(binning()) - 2) == 3) {
+          v_cuts <- c(test()[length(test()) * (react_3()[1] / 100)], test()[length(test()) * (react_3()[2] / 100)])
+        }else if((nrow(binning()) - 2) == 2) {
+          v_cuts <- c(test()[length(test()) * (react_3()[1] / 100)])
+        }
+        else {
+          v_cuts <- c(test()[length(test()) * (react_4()[1] / 100)], test()[length(test()) * (react_4()[2] / 100)],
+                      test()[length(test()) * (react_4()[3] / 100)])
+        }
+        v_cuts <- v_cuts
+
+        psi_full <- data.frame()
+
+        for(i in 1:length(v_years_2)){
+          psi_full <- rbind(psi_full,try({GTquantrisk::before_psi(i,input$factor,(nrow(binning()) - 2),v_cuts[1],ifelse(!is.na(v_cuts[2]), v_cuts[2],NA),ifelse(!is.na(v_cuts[3]),v_cuts[3],NA))}))
+        }
+
+        psi_full <- psi_full %>%
+          filter(!(Cutpoint %in% c("Missing","Total")))
+
+        psi_full <- psi_full
+
+      }else if(input$method == "Stored Cuts"){
+
+        psi_full <- data.frame()
+
+        v_cuts <- opt_cuts()
+
+        for(i in 1:length(v_years_2)){
+          psi_full <- rbind(psi_full,try({GTquantrisk::before_psi(i,input$factor,(nrow(binning()) - 2),v_cuts[1],ifelse(!is.na(v_cuts[2]), v_cuts[2],NA),ifelse(!is.na(v_cuts[3]),v_cuts[3],NA))}))
+        }
+
+        psi_full <- psi_full %>%
+          filter(!(Cutpoint %in% c("Missing","Total")))
+
+        psi_full <- psi_full
+
+      }else if(input$method == "Quantile") {
+
+        v_cuts <- cuts()
+
+        psi_full <- data.frame()
+
+        for(i in 1:length(v_years_2)){
+          psi_full <- rbind(psi_full,try({GTquantrisk::before_psi(i,input$factor,input$bin,v_cuts[1],v_cuts[2],ifelse(!is.na(v_cuts[3]),v_cuts[3],NA))}))
+        }
+
+        psi_full <- psi_full %>%
+          filter(!(Cutpoint %in% c("Missing","Total")))
+
+        psi_full <- psi_full
+      }else{
+
+        v_cuts <- cuts()
+
+        psi_full <- data.frame()
+
+        for(i in 1:length(v_years_2)){
+          psi_full <- rbind(psi_full,try({GTquantrisk::before_psi(i,input$factor,input$no_bins,v_cuts[1],v_cuts[2],ifelse(!is.na(v_cuts[3]),v_cuts[3],NA))}))
+        }
+
+        psi_full <- psi_full %>%
+          filter(!(Cutpoint %in% c("Missing","Total")))
+
+        psi_full <- psi_full
+      }
+
+      psi_full <- psi_full
+
+    })
+
+    stability_data_pct <- reactive({
+
+      psi_full <- stability_data_raw()
+
+
+
+      if(input$method == "Optimal" | input$method == "Stored Cuts"){
+
+
+        if((nrow(binning()) - 2) == 3){
+          psi_test_frame <- data.frame(matrix(ncol = ((nrow(binning()) - 2) + 1),nrow = length(v_years_2)))
+          colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3")
+
+          for(i in 1:(nrow(psi_full)/3)){
+
+            psi_test_frame$Date[i] <- year(psi_full[(3*i -2),1])
+            psi_test_frame$group_1[i] <- psi_full[(3*i - 2),3]
+            psi_test_frame$group_2[i] <- psi_full[(3*i - 1),3]
+            psi_test_frame$group_3[i] <- psi_full[(3*i),3]
+
+          }
+
+          psi_test_frame <- psi_test_frame
+        }else if((nrow(binning()) - 2) == 2) {
+
+          psi_test_frame <- data.frame(matrix(ncol = ((nrow(binning()) - 2) + 1),nrow = length(v_years_2)))
+          colnames(psi_test_frame) <- c("Date","group_1","group_2")
+
+          for(i in 1:(nrow(psi_full)/2)){
+
+            psi_test_frame$Date[i] <- year(psi_full[(2*i -1),1])
+            psi_test_frame$group_1[i] <- psi_full[(2*i - 1),3]
+            psi_test_frame$group_2[i] <- psi_full[(2*i),3]
+
+          }
+          psi_test_frame <- psi_test_frame
+        }else{
+
+          psi_test_frame <- data.frame(matrix(ncol = ((nrow(binning()) - 2) + 1),nrow = length(v_years_2)))
+          colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3","group_4")
+
+          for(i in 1:(nrow(psi_full)/4)){
+
+            psi_test_frame$Date[i] <- year(psi_full[(4*i -3),1])
+            psi_test_frame$group_1[i] <- psi_full[(4*i - 3),3]
+            psi_test_frame$group_2[i] <- psi_full[(4*i - 2),3]
+            psi_test_frame$group_3[i] <- psi_full[(4*i - 1),3]
+            psi_test_frame$group_4[i] <- psi_full[(4*i),3]
+
+          }
+
+          psi_test_frame <- psi_test_frame
+        }
+        psi_test_frame <- psi_test_frame
+      }else if(input$method == "Quantile"){
+        if(input$bin == 3){
+          psi_test_frame <- data.frame(matrix(ncol = (input$bin + 1),nrow = length(v_years_2)))
+          colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3")
+
+          for(i in 1:(nrow(psi_full)/3)){
+
+            psi_test_frame$Date[i] <- year(psi_full[(3*i -2),1])
+            psi_test_frame$group_1[i] <- psi_full[(3*i - 2),3]
+            psi_test_frame$group_2[i] <- psi_full[(3*i - 1),3]
+            psi_test_frame$group_3[i] <- psi_full[(3*i),3]
+          }
+
+          psi_test_frame <- psi_test_frame
+
+        }else{
+          psi_test_frame <- data.frame(matrix(ncol = (input$bin + 1),nrow = length(v_years_2)))
+          colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3","group_4")
+
+          for(i in 1:(nrow(psi_full)/4)){
+
+            psi_test_frame$Date[i] <- year(psi_full[(4*i -3),1])
+            psi_test_frame$group_1[i] <- psi_full[(4*i - 3),3]
+            psi_test_frame$group_2[i] <- psi_full[(4*i - 2),3]
+            psi_test_frame$group_3[i] <- psi_full[(4*i - 1),3]
+            psi_test_frame$group_4[i] <- psi_full[(4*i),3]
+
+          }
+
+          psi_test_frame <- psi_test_frame
+        }
+        psi_test_frame <- psi_test_frame
+      }else{
+
+        if(input$no_bins == 3){
+          psi_test_frame <- data.frame(matrix(ncol = (input$no_bins + 1),nrow = length(v_years_2)))
+          colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3")
+
+          for(i in 1:(nrow(psi_full)/3)){
+
+            psi_test_frame$Date[i] <- year(psi_full[(3*i -2),1])
+            psi_test_frame$group_1[i] <- psi_full[(3*i - 2),3]
+            psi_test_frame$group_2[i] <- psi_full[(3*i - 1),3]
+            psi_test_frame$group_3[i] <- psi_full[(3*i),3]
+          }
+
+          psi_test_frame <- psi_test_frame
+
+        }else{
+          psi_test_frame <- data.frame(matrix(ncol = (input$no_bins + 1),nrow = length(v_years_2)))
+          colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3","group_4")
+
+          for(i in 1:(nrow(psi_full)/4)){
+
+            psi_test_frame$Date[i] <- year(psi_full[(4*i -3),1])
+            psi_test_frame$group_1[i] <- psi_full[(4*i - 3),3]
+            psi_test_frame$group_2[i] <- psi_full[(4*i - 2),3]
+            psi_test_frame$group_3[i] <- psi_full[(4*i - 1),3]
+            psi_test_frame$group_4[i] <- psi_full[(4*i),3]
+
+          }
+
+          psi_test_frame <- psi_test_frame
+        }
+      }
+      psi_test_frame <- psi_test_frame
+    })
+
+
+
+
+    output$stability_table <- DT::renderDataTable({
+
+      data <- stability_data_raw()
+
+      DT::datatable(data)
+
+    })
+
+
+
+    output$stability_plot <- renderPlot({
+
+      data <- stability_data_raw()
+
+
+
+      if(input$method == "Optimal" | input$method == "Stored Cuts") {
+        g <- ggplot(data, aes(x = Year,y=PctRec*100,fill=factor(Cutpoint,levels = Cutpoint[(nrow(binning()) - 2):1])))+
+          geom_bar(stat="identity") +
+          geom_point(data, mapping = aes(x = Year, y = BadRate*100, col = factor(Cutpoint, levels = Cutpoint[(nrow(binning()) - 2):1])))+
+          geom_line(data, mapping = aes(x = Year, y = BadRate*100, col = factor(Cutpoint, levels = Cutpoint[(nrow(binning()) - 2):1]), group=Cutpoint))+
+          scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red"),.3)) +
+          scale_color_manual("Bad Rate", values = c("Green", "Darkorange", "Red"))+
+          ggtitle("Stability of population and bad rate of groups over time") +
+          ylab("Percentage") +
+          theme(strip.background =element_rect(fill="white"))+
+          theme(panel.background = element_rect(fill="white",
+                                                size = 2, linetype = "solid"),
+                plot.title = element_text(face = "bold.italic",hjust = 0.5),
+                axis.title.x = element_text(face = "bold.italic"),
+                axis.title.y = element_text(face = "bold.italic"),
+                plot.background = element_rect(fill = "white"),
+                panel.grid.major.y = element_line(color="grey"),
+                panel.grid.minor.y = element_line(color="grey"),
+                panel.border=element_rect(colour="black",fill=NA,size=1))
+
+        if((nrow(binning()) - 2) == 3){
+          g +
+            scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red"),.3)) +
+            scale_color_manual("Bad Rate", values = c("Green", "Darkorange", "Red"))
+        }else if((nrow(binning()) - 2) == 2){
+          g +
+            scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange"),.3)) +
+            scale_color_manual("Bad Rate", values = c("Green", "Darkorange"))
+        }else{
+          g +
+            scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red","Purple"),.3)) +
+            scale_color_manual("Bad Rate", values = c("Green", "Darkorange", "Red","Purple"))
+        }
+
+      }else if(input$method == "Quantile"){
+
+        g <- ggplot(data, aes(x = Year,y=PctRec*100,fill=factor(Cutpoint,levels = Cutpoint[input$bin:1])))+
+          geom_bar(stat="identity") +
+          geom_point(data, mapping = aes(x = Year, y = BadRate*100, col = factor(Cutpoint, levels = Cutpoint[input$bin:1])))+
+          geom_line(data, mapping = aes(x = Year, y = BadRate*100, col = factor(Cutpoint, levels = Cutpoint[input$bin:1]), group=Cutpoint))+
+          ggtitle("Stability of population and bad rate of groups over time") +
+          ylab("Percentage") +
+          theme(strip.background =element_rect(fill="white"))+
+          theme(panel.background = element_rect(fill="white",
+                                                size = 2, linetype = "solid"),
+                plot.title = element_text(face = "bold.italic",hjust = 0.5),
+                axis.title.x = element_text(face = "bold.italic"),
+                axis.title.y = element_text(face = "bold.italic"),
+                plot.background = element_rect(fill = "white"),
+                panel.grid.major.y = element_line(color="grey"),
+                panel.grid.minor.y = element_line(color="grey"),
+                panel.border=element_rect(colour="black",fill=NA,size=1))
+
+        if(input$bin == 3){
+          g +
+            scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red"),.3)) +
+            scale_color_manual("Bad Rate", values = c("Green", "Darkorange", "Red"))
+        }else{
+          g +
+            scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red","Purple"),.3)) +
+            scale_color_manual("Bad Rate", values = c("Green", "Darkorange", "Red","Purple"))
+        }
+
+      }else{
+
+        g <- ggplot(data, aes(x = Year,y=PctRec*100,fill=factor(Cutpoint,levels = Cutpoint[input$no_bins:1])))+
+          geom_bar(stat="identity") +
+          geom_point(data, mapping = aes(x = Year, y = BadRate*100, col = factor(Cutpoint, levels = Cutpoint[input$no_bins:1])))+
+          geom_line(data, mapping = aes(x = Year, y = BadRate*100, col = factor(Cutpoint, levels = Cutpoint[input$no_bins:1]), group=Cutpoint))+
+          ggtitle("Stability of population and bad rate of groups over time") +
+          ylab("Percentage") +
+          theme(strip.background =element_rect(fill="white"))+
+          theme(panel.background = element_rect(fill="white",
+                                                size = 2, linetype = "solid"),
+                plot.title = element_text(face = "bold.italic",hjust = 0.5),
+                axis.title.x = element_text(face = "bold.italic"),
+                axis.title.y = element_text(face = "bold.italic"),
+                plot.background = element_rect(fill = "white"),
+                panel.grid.major.y = element_line(color="grey"),
+                panel.grid.minor.y = element_line(color="grey"),
+                panel.border=element_rect(colour="black",fill=NA,size=1))
+
+        if(input$no_bins == 3){
+          g +
+            scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red"),.3)) +
+            scale_color_manual("Bad Rate", values = c("Green", "Darkorange", "Red"))
+        }else{
+          g +
+            scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red","Purple"),.3)) +
+            scale_color_manual("Bad Rate", values = c("Green", "Darkorange", "Red","Purple"))
+        }
+
+      }
+    })
+
+
+    psi_data <- reactive({
+
+      psi_test_frame <- stability_data_pct()
+
+      if(input$method == "Optimal" | input$method == "Stored Cuts"){
+
+
+        psi_transpose <- GTquantrisk::psi_woe_bins(psi_test_frame,(nrow(binning())-2),length(v_years_2))
+
+
+      }else if(input$method == "Quantile"){
+
+        psi_transpose <- GTquantrisk::psi_woe_bins(psi_test_frame, input$bin, length(v_years_2))
+
+      }
+
+      else{
+
+        psi_transpose <- GTquantrisk::psi_woe_bins(psi_test_frame, input$no_bins, length(v_years_2))
+
+
+      }
+
+      psi_transpose <- psi_transpose
+
+    })
+
+
+    output$psi_table <- DT::renderDataTable({
+
+      data <- psi_data()
+      DT::datatable(data)
+
+    })
+
+
+    output$psi_plot <- renderPlot({
+
+      ggplot(data = psi_data(), aes(x = date, y = PSI))+
+        geom_point() +
+        geom_line(stat = "identity") +
+        ggtitle("PSI over time") +
+        xlab("Year") +
+        theme(strip.background =element_rect(fill="white"))+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+
+    })
+
+    frequency_cuts <- reactive({
+
+      if(input$method == "Optimal") {
+        bins <- smbinning(input_data, y = "target", x = input$factor)$ivtable
+      }else if(input$method == "Stored Cuts"){
+        bins <- smbinning.custom(input_data, y = "target", x = input$factor, cuts = opt_cuts())$ivtable
+      }else{
+        bins <- smbinning.custom(input_data, y = "target", x = input$factor, cuts = cuts())$ivtable
+      }
+
+      cuts <- as.vector(bins[1:(nrow(bins)-3), 1])
+      cuts <- as.numeric(gsub("<=", "", cuts))
+      cuts <- cuts
+
+    })
+
+
+    final_score_data <- reactive({
+
+      bins <- binning()
+      iv <- bins[nrow(bins), "IV"]
+      gini <- gini_full()
+      no_bin <- (nrow(bins) - 2)
+      cor_woe <- cor(bins$WoE[1:no_bin],seq(1:no_bin),method = "spearman")
+
+      if(no_bin == 2){
+        u_shape <- FALSE
+        n_shape <- FALSE
+      }else if(no_bin == 3){
+        u_shape <- isTRUE(bins$WoE[1] > bins$WoE[2] & bins$WoE[2] < bins$WoE[3])
+        n_shape <- isTRUE(bins$WoE[1] < bins$WoE[2] & bins$WoE[2] > bins$WoE[3])
+      }else{
+        u_shape <- isTRUE(bins$WoE[1] > bins$WoE[2] & bins$WoE[3] < bins$WoE[4])
+        n_shape <- isTRUE(bins$WoE[1] < bins$WoE[2] & bins$WoE[3] > bins$WoE[4])
+      }
+
+      woe_space <- min(abs(diff(bins$WoE[1:no_bin])))
+      br_space <- min(abs(diff(bins$BadRate[1:no_bin])))
+
+      iv_over_time <- iv_time()
+      gini_over_time <- gini_time()
+      iv_gini <- left_join(iv_over_time,gini_over_time, by = c("date" = "date"))
+      colnames(iv_gini) <- c("date","cuts", "IV", "gini")
+      iv_gini <- iv_gini[, c("date", "IV", "gini")]
+
+      iv_sd <- sd(iv_gini$IV)
+      gini_sd <- sd(iv_gini$gini)
+
+      iv_gini_model_IV <- iv_gini %>%
+        arrange(IV)
+
+      x <- (1:nrow(iv_gini_model_IV))
+
+      model_IV <- coef(lm(iv_gini_model_IV$IV ~ x))[2]
+
+      iv_gini_model_gini <- iv_gini %>%
+        arrange(gini)
+
+      model_gini <- coef(lm(iv_gini_model_IV$gini ~ x))[2]
+
+      score_table <- data.frame(matrix(nrow = 1,ncol = 10))
+      score_table[1,1] <- iv
+      score_table[1,2] <- gini
+      score_table[1,3] <- ifelse(input$risk_dir_choice == "Upwards",isTRUE(cor_woe == 1),ifelse(input$risk_dir_choice == "Downwards",isTRUE(cor_woe == -1),
+                                                                                                ifelse(input$risk_dir_choice == "U-shaped",u_shape,n_shape)))
+      score_table[1,4] <- round(iv_sd,2)
+      score_table[1,5] <- round(model_IV,2)
+      score_table[1,6] <- round(gini_sd,2)
+      score_table[1,7] <- round(model_gini,2)
+      score_table[1,8] <- sum(psi_data()[,"PSI"])
+      score_table[1,9] <- woe_space
+      score_table[1,10] <- br_space
+
+      score_table <- score_table
+      colnames(score_table) <- c("IV","Gini","Match Risk Direction","SD IV Over Time","Slope of IV", "SD Gini Over Time","Sloper of Gini","PSI Index", "Min WoE Diff", "Min Bad Rate Diff")
+      score_table <- score_table
+    })
+
+    output$final_score_table <- DT::renderDataTable({
+
+      DT::datatable(final_score_data())
+
+    })
+
+
+    # frequwncy distribution
+    output$frequency <- renderPlotly({
+      data <- as.data.frame(input_data[, input$factor])
+      names(data) <- "variable"
+      max <- max(data[,"variable"], na.rm = T)
+      min <- min(data[,1], na.rm = T)
+      ggplot(data, aes(x = variable)) +
+        geom_histogram( binwidth = (max-min)/input$bin_number, color = "#DACDED", fill = "#B59BDB") +
+        geom_density(aes(y= ((max-min)/input$bin_number)* ..count..)) +
+        geom_vline(xintercept = frequency_cuts(), linetype="dashed") +
+        ggtitle(paste(input$factor,  "distribution plot")) +
+        xlab(input$factor) +        theme(strip.background =element_rect(fill="white"))+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+    })
+
+
+  }
+}
+
+## Jeffrey
+f_jeffrey_test <- function(df) {
+
+  jeffrey_t1 <- df
+
+  new_t1 <- data.frame(matrix(ncol = 7, nrow = 1))
+
+  colnames(new_t1) <- c("Observations", "ODR", "PD", "alpha", "beta", "P_value", "Result")
+
+  new_t1$Observations <- nrow(jeffrey_t1)
+  new_t1$ODR <- round(sum(jeffrey_t1$target) / nrow(jeffrey_t1), digits = 3)
+  new_t1$PD <- round(mean(jeffrey_t1$pd), digits = 3)
+  new_t1$alpha <- sum(jeffrey_t1$target) + 1/2
+  new_t1$beta <- (nrow(jeffrey_t1) - sum(jeffrey_t1$target) + 1/2)
+
+  new_t1$P_value <- round(pbeta(new_t1$PD, new_t1$alpha, new_t1$beta, ncp = 0, lower.tail = TRUE, log.p = FALSE ), digits = 5)
+  new_t1$Result <- ifelse(new_t1$P_value > .05, "Fail to reject the null hypothesis: PASS", "Reject the null hypothesis")
+
+  return(new_t1)
+}
+
+## Scorecard Build Tool
+
+## Scorecard build ui
+
+f_scorecard_build_ui <- function(){
+
+  ui <- dashboardPage(
+    dashboardHeader(title = "Model Validation Tool"),
+    dashboardSidebar(width = 350,
+                     sidebarMenu(style= "position: fixed; overflow: visible;",
+                                 conditionalPanel('input.tabs === "Model Overview"',
+                                                  selectInput("model_type",
+                                                              "Choose a Model Type:",
+                                                              choices = c("Original", "Modified")),
+
+                                                  checkboxGroupInput("remove_var", label = "Choose a Variable to Remove:",
+                                                                     choices = variables_used,
+                                                                     selected = variables_used),
+
+                                                  selectInput("dataframe_type",
+                                                              "Choose a Dataframe Type:",
+                                                              choices = c("Train", "Test", "Full"))),
+                                 conditionalPanel('input.tabs == "Scorecard Overview"',
+                                                  sliderInput("bin", "Number of Scorecard Grades:", min = 5, max = 7, value = 5, step = 1),
+                                                  downloadButton("export_data", "Export"),
+                                                  conditionalPanel(
+                                                    condition = "input.bin == '5'",
+                                                    noUiSliderInput(
+                                                      inputId = "bins_5", label = "Adjust binwidth:",
+                                                      min = 375, max = 800,
+                                                      value = c(425,500,575,650),
+                                                      orientation = "horizontal", width = 350,
+                                                      color = "#68228B")
+                                                  ),
+                                                  conditionalPanel(
+                                                    condition = "input.bin == '6'",
+                                                    noUiSliderInput(
+                                                      inputId = "bins_6", label = "Adjust binwidth:",
+                                                      min = 375, max = 800,
+                                                      value = c(420,490,550,610,675),
+                                                      orientation = "horizontal", width = 350,
+                                                      color = "#68228B")
+                                                  ),
+                                                  conditionalPanel(
+                                                    condition = "input.bin == '7'",
+                                                    noUiSliderInput(
+                                                      inputId = "bins_7", label = "Adjust binwidth:",
+                                                      min = 375, max = 800,
+                                                      value = c(404.29, 434.29, 457.86, 480, 508.93, 570.36),
+                                                      orientation = "horizontal", width = 350,
+                                                      color = "#68228B")
+                                                  ),
+                                                  actionButton("update", "Update Binwidth")),
+                                 conditionalPanel(
+                                   'input.tabs === "Validation"',
+                                   selectInput("valid_type", label = "Type of Test", choices = c("Model Discrimination", "Jeffrey","Grade Stability"), selected = "Model Discrimination"),
+                                   conditionalPanel('input.valid_type === "Model Discrimination"',
+                                                    selectInput("data", label = "Select Data:", choices = c("Train", "Test", "Full"), selected = "Train")),
+                                   conditionalPanel('input.valid_type === "Jeffrey"'
+                                   ),
+                                   conditionalPanel('input.valid_type === "Grade Stability"',
+                                                    selectInput("psi_type", "Choose PSI method", choices = c("Rolling","Base"), selected = "Rolling"))
+                                 )
+                     )),
+    dashboardBody(useShinyjs(),
+                  tabsetPanel(type = "tabs",
+                              id = "tabs",
+                              tabPanel(title = "Model Overview",
+
+
+                                       fluidRow(column(12, align = "center", textOutput("variable_selection"))),
+                                       tags$h3(tags$style("#variable_selection{color : purple; font-size: 25px}")),
+
+                                       fluidRow(column(12, align = "left", textOutput("variable_selection_text"))),
+                                       tags$h3(tags$style("#variable_selection_text{color : black; font-size: 20px}")),
+
+                                       DT::dataTableOutput("full_high_var"),
+
+                                       br(),
+                                       br(),
+
+                                       fluidRow(column(12, align = "center", textOutput("original_model_header"))),
+                                       tags$h3(tags$style("#original_model_header{color : purple; font-size: 25px}")),
+
+                                       fluidRow(column(12, align = "left", htmlOutput("original_model_header_text"))),
+                                       tags$h3(tags$style("#original_model_header_text{color : black; font-size: 20px}")),
+
+                                       DT::dataTableOutput("original_summary"),
+
+                                       br(),
+                                       br(),
+
+                                       fluidRow(column(12, align = "center", textOutput("original_model_corr"))),
+                                       tags$h3(tags$style("#original_model_corr{color : purple; font-size: 25px}")),
+
+                                       plotlyOutput("corrmatrix"),
+
+                                       br(),
+                                       br(),
+
+                                       fluidRow(column(12, align = "center", textOutput("iv_gini_factor_text"))),
+                                       tags$h3(tags$style("#iv_gini_factor_text{color : purple; font-size: 25px}")),
+
+                                       fluidRow(column(12, align = "centre", htmlOutput("iv_gini_factor_text_2"))),
+                                       tags$h3(tags$style("#iv_gini_factor_text_2{color : black; font-size: 20px}")),
+
+                                       DT::dataTableOutput("iv_gini_factor"),
+
+                                       br(),
+                                       br(),
+
+                                       fluidRow(column(12, align = "center", textOutput("pd_graph"))),
+                                       tags$h3(tags$style("#pd_graph{color : purple; font-size: 25px}")),
+
+                                       plotOutput("pd_train"),
+                                       plotOutput("pd_test"),
+                                       plotOutput("pd_full"),
+
+                                       br(),
+                                       br(),
+
+                                       fluidRow(column(12, align = "center", textOutput("gini_header"))),
+                                       tags$h3(tags$style("#gini_header{color : purple; font-size: 25px}")),
+
+                                       fluidRow(column(12, align = "left", htmlOutput("gini_text"))),
+                                       tags$h3(tags$style("#gini_text{color : black; font-size: 20px}")),
+
+                                       br(),
+                                       br(),
+
+                                       fluidRow(column(12, align = "center", textOutput("roc_header"))),
+                                       tags$h3(tags$style("#roc_header{color : purple; font-size: 25px}")),
+
+                                       fluidRow(column(12, align = "left", textOutput("roc_text"))),
+                                       tags$h3(tags$style("#roc_text{color : black; font-size: 20px}")),
+
+                                       plotOutput("roc_curve")
+
+
+                              ),
+                              tabPanel("Scorecard Overview",
+                                       h2("Scorecard"),
+                                       DT::dataTableOutput("scorecard_table"),
+                                       plotOutput("scorecard_distribution"),
+                                       plotOutput("scorecard_histogram"),
+                                       h2("Scorecard Summary"),
+                                       DT::dataTableOutput("scorecard_summary"),
+                                       plotOutput("default_rate_plot")#,
+                                       # h2("Pluto and Tasche Single Period Table"),
+                                       # DT::dataTableOutput("pluto_one"),
+                                       # h2("Pluto and Tasche Multi Period Table"),
+                                       # DT::dataTableOutput("pluto_multi")
+
+                              ),
+                              tabPanel("Validation",
+                                       fluidRow(column(12, align = "center", textOutput("valid_head"))),
+                                       tags$h1(tags$style("#valid_head{color : purple; font-size : 20px}")),
+                                       br(),
+                                       htmlOutput("valid_descr"),
+                                       tags$h3(tags$style("#valid_descr{color : black; font-size : 16px}")),
+                                       br(),
+                                       br(),
+                                       conditionalPanel('input.valid_type === "Model Discrimination"',
+                                                        DT::dataTableOutput("ginis"),
+                                                        br(),
+                                                        br(),
+                                                        DT::dataTableOutput("gini_test"),
+                                                        br(),
+                                                        br(),
+                                                        plotlyOutput("gini_time")
+                                       ),
+                                       conditionalPanel('input.valid_type === "Jeffrey"',
+                                                        DT::dataTableOutput("jeffrey")),
+                                       conditionalPanel('input.valid_type === "Grade Stability"',
+                                                        plotOutput("stability_plot"),
+                                                        br(),
+                                                        plotOutput("psi_plot"),
+                                                        h2("Grade Migration Table"),
+                                                        DT::dataTableOutput("grade_migration_table"))
+                              ))
+    )
+  )
+
+}
+
+
+#--------------------------------------------------------------------------------------------#
+#---------------------------Shiny Server Function--------------------------------------------#
+#--------------------------------------------------------------------------------------------#
+
+f_scorecard_build_server <- function(df_train = full_data_no_inf_cor, df_test = full_data_no_inf_cor_test, df_full = full_data_no_inf_cor_full,
+                                     variables_used = variables_used, full_high_vars = full_high_vars, my_summary = my_summary, step_model = step_model,
+                                     valid_train = valid_train, valid_test = valid_test, valid_full = valid_full){
+
+  #--------------Shiny Server--------------------------------------------#
+  server <- function(input,output,session){
+
+    #### Model Selection and Summary Server ####
+    new_table <- reactive({
+      original_variables <- df_train[, variables_used]
+      original_variables[,c(input$remove_var), drop = FALSE]
+    })
+
+    new_model <- reactive({
+      outcome <- "target"
+      variables_used <- c(input$remove_var)
+      f <- as.formula(
+        paste(outcome,
+              paste(variables_used, collapse = " + "),
+              sep = " ~ "))
+      new_model <- glm(f, family = binomial(link = "logit"), data = df_train[,-c(1, 2)])
+      new_model
+    })
+
+    output$variable_selection <- renderText({
+      paste("Variable Selection - Highly Correlated Variables and their Corresponding IVs")
+    })
+
+    output$variable_selection_text <- renderText({
+      paste("Currently we have 43 potential factors to include in a Logistic Regression model for calcualting the probability of default
+          for our simulated corporate portfolio. In order to narrow down the choice of factor inclusion into the model we found the factors
+          that were highly correlated with each other (figure of 0.5 and above).")
+    })
+
+    output$full_high_var <- DT::renderDataTable({
+      DT::datatable(full_high_vars)
+    })
+
+    #### Model Selection and Summary Server ####
+    output$original_model_header <- renderText({
+      paste("Model Summary")
+    })
+
+    output$original_model_header_text <- renderText({
+      HTML(paste("We decided to use the backward selection technique in order to find the model with the best fit for our data. ",
+                 "<br/>",
+                 "<br/>",
+                 "We split the data into a Training Set (80% of the data) and a Test Set (20% of the data). We then built a full model
+               and with the help of the stepAIC() function in R we performed a stepwise model selection by AIC. We parameterised the
+               function so that all of the variables would be significant at the 5% level.",
+                 "<br/>",
+                 "<br/>",
+                 "We realised that the coefficients of some variabels did correspond with their expected risk direction. We have allowed
+               the user to manually deselect some of the variables in the side panel until the optimised model is found. ",
+                 "<br/>",
+                 "<br/>",
+                 "The following is the summary data and its correlation matrix for the Train Model."))
+    })
+
+    output$original_summary <- DT::renderDataTable({
+      if(input$model_type == "Original"){
+        data <- my_summary$coefficients
+        DT::datatable(data)
+      }else{
+        My_new_summary <- summary(new_model())
+        data <- My_new_summary$coefficients
+        DT::datatable(data)
+      }
+
+    })
+
+    output$original_model_corr <- renderText({
+      paste("Correlation Matrix for Model")
+    })
+
+    output$corrmatrix <- renderPlotly({
+      if(input$model_type == "Original"){
+        correlation <- vis_cor(df_train[, variables_used])
+        ggplotly(correlation) %>%
+          layout(autosize=TRUE)
+      }else{
+        correlation <- vis_cor(new_table())
+        ggplotly(correlation) %>%
+          layout(autosize=TRUE)
+      }
+    })
+
+    output$iv_gini_factor_text <- renderText({
+      paste("Factor Level Discrimination")
+    })
+
+    output$iv_gini_factor_text_2 <- renderText({
+      paste("Please select the type of dataframe in the sidepanel that you wish to run this test on.",
+            "<br/>",
+            "<br/>",
+            "No Rag status is reported for Overall Factor Information Values as there are no widely applicable statistical tests available to test the above measure. As a rule of thumb, high IV indicates powerful predictive power.",
+            "<br/>",
+            "<br/>",
+            "The Rag status reported for Overall Gini is based off the following:",
+            "<br/>",
+            "Green: Less than two factor Ginis < 10%.",
+            "<br/>",
+            "Amber: Exactly two factor Ginis < 10%.",
+            "<br/>",
+            "Red: Two or more factor Ginis < 10%.")
+    })
+
+    output$iv_gini_factor <- DT::renderDataTable({
+
+      if(input$dataframe_type == "Train"){
+        raw_dataframe <- train
+        woe_dataframe <- valid_train
+      }else if(input$dataframe_type == "Test"){
+        raw_dataframe <- test
+        woe_dataframe <- valid_test
+      }else{
+        raw_dataframe <- full
+        woe_dataframe <- valid_full
+      }
+
+      if(input$model_type == "Original"){
+
+        var_ivs <- c()
+        var_ginis <- c()
+        var_current <- c()
+        # get the IV and gini for each factor
+        for(i in 1:length(variables_used)) {
+
+          # using smbinning.custom to get ivs (using cuts df and raw values)
+          variable <- variables_used[i]
+          var_cuts <- cuts[cuts$variable == variable, ]
+          var_cuts <- unlist(var_cuts[, 2:4])
+          var_cuts <- as.vector(var_cuts)
+          var_cuts <- as.numeric(var_cuts)
+          var_cuts <- var_cuts[complete.cases(var_cuts)]
+          binned <- smbinning.custom(raw_dataframe, y = "target", x = variable, cuts = var_cuts)$ivtable
+
+          var_iv <- binned[(length(var_cuts)+3), 14]
+          var_ivs <- c(var_ivs, var_iv)
+
+          # using gini_calc formula to get gini per factor (using WOE dataframe)
+          my_dataframe <- woe_dataframe[,c(variable, "target")]
+          colnames(my_dataframe) <- c("group", "target")
+          var_gini <- gini_calc(my_dataframe)
+          var_ginis <- c(var_ginis, var_gini)
+
+          # cbind the variables, iv and gini vectors together
+          var_current <- c(var_current, variable)
+          iv_gini_per_factor <- as.data.frame(cbind(var_current, var_ivs, var_ginis))
+          colnames(iv_gini_per_factor) <- c("Variable", "IV", "Gini")
+
+        }
+
+        for(i in 1 :length(iv_gini_per_factor)){
+          if(abs(as.numeric(as.character(iv_gini_per_factor$Gini[i]))) < 0.1){
+            iv_gini_per_factor$Gini_Fail[i] <- 1
+          }else{
+            iv_gini_per_factor$Gini_Fail[i] <- 0
+          }
+          if(as.numeric(as.character(iv_gini_per_factor$Gini[i])) <= 0){
+            iv_gini_per_factor$Gini_Negative[i] <- 1
+          }else{
+            iv_gini_per_factor$Gini_Negative[i] <- 0
+          }
+        }
+
+        if(sum(iv_gini_per_factor$Gini_Fail) < 2){
+          gini_result <- "Green"
+        }else if( (sum(iv_gini_per_factor$Gini_Fail) == 2) ){
+          gini_result <- "Amber"
+        }else if( (sum(iv_gini_per_factor$Gini_Fail) > 2) ){
+          gini_result <- "Red"
+        }else{
+          gini_result <- "No RAG status reported"
+        }
+
+        #if(sum(iv_gini_per_factor$Gini_Fail) < 2){
+        #  gini_result <- "Green"
+        #}else if( (sum(iv_gini_per_factor$Gini_Fail) >= 2) & (sum(iv_gini_per_factor$Gini_Negative) <= 0) ){
+        #  gini_result <- "Amber"
+        #}else if( (sum(iv_gini_per_factor$Gini_Negative) >= 1) ){
+        #  gini_result <- "Red"
+        #}else{
+        #  gini_result <- "No RAG status reported"
+        #}
+
+        iv_gini_per_factor$Variable <- as.character(iv_gini_per_factor$Variable)
+        iv_gini_per_factor$IV <- as.numeric(as.character(iv_gini_per_factor$IV))
+        iv_gini_per_factor$Gini <- as.numeric(as.character(iv_gini_per_factor$Gini))
+
+
+        result_vector <- c("Overall RAG Rating", "No RAG status reported", gini_result, 0, 0)
+        iv_gini_per_factor <- rbind(iv_gini_per_factor, result_vector)
+
+        DT::datatable(iv_gini_per_factor[,c(1:3)])%>%
+          formatStyle(
+            'IV',
+            color = styleInterval(c(0.1), c('red', 'green'))) %>%
+          formatStyle(
+            'Gini',
+            color = styleInterval(c(-0.1, 0.1), c('green', 'red', 'green')))
+
+      }else{
+
+        var_ivs <- c()
+        var_ginis <- c()
+        var_current <- c()
+
+        my_new_summary <- summary(new_model())
+        new_variables_used <- rownames(my_new_summary$coefficients)[-1]
+        new_variables_used
+
+        # get the IV and gini for each factor
+        for(i in 1:length(new_variables_used)) {
+
+          # using smbinning.custom to get ivs (using cuts df and raw values)
+          variable <- new_variables_used[i]
+          var_cuts <- cuts[cuts$variable == variable, ]
+          var_cuts <- unlist(var_cuts[, 2:4])
+          var_cuts <- as.vector(var_cuts)
+          var_cuts <- as.numeric(var_cuts)
+          var_cuts <- var_cuts[complete.cases(var_cuts)]
+          binned <- smbinning.custom(raw_dataframe, y = "target", x = variable, cuts = var_cuts)$ivtable
+
+          var_iv <- binned[(length(var_cuts)+3), 14]
+          var_ivs <- c(var_ivs, var_iv)
+
+          # using gini_calc formula to get gini per factor (using WOE dataframe)
+          my_dataframe <- woe_dataframe[,c(variable, "target")]
+          colnames(my_dataframe) <- c("group", "target")
+          var_gini <- gini_calc(my_dataframe)
+          var_ginis <- c(var_ginis, var_gini)
+
+          # cbind the variables, iv and gini vectors together
+          var_current <- c(var_current, variable)
+          iv_gini_per_factor <- as.data.frame(cbind(var_current, var_ivs, var_ginis))
+          colnames(iv_gini_per_factor) <- c("Variable", "IV", "Gini")
+
+        }
+
+        for(i in 1 :length(iv_gini_per_factor)){
+          if(abs(as.numeric(as.character(iv_gini_per_factor$Gini[i]))) < 0.1){
+            iv_gini_per_factor$Gini_Fail[i] <- 1
+          }else{
+            iv_gini_per_factor$Gini_Fail[i] <- 0
+          }
+          if(as.numeric(as.character(iv_gini_per_factor$Gini[i])) <= 0){
+            iv_gini_per_factor$Gini_Negative[i] <- 1
+          }else{
+            iv_gini_per_factor$Gini_Negative[i] <- 0
+          }
+        }
+
+        if(sum(iv_gini_per_factor$Gini_Fail) < 2){
+          gini_result <- "Green"
+        }else if( (sum(iv_gini_per_factor$Gini_Fail) == 2) ){
+          gini_result <- "Amber"
+        }else if( (sum(iv_gini_per_factor$Gini_Fail) > 2) ){
+          gini_result <- "Red"
+        }else{
+          gini_result <- "No RAG status reported"
+        }
+
+        #if(sum(iv_gini_per_factor$Gini_Fail) < 2){
+        #  gini_result <- "Green"
+        #}else if( (sum(iv_gini_per_factor$Gini_Fail) >= 2) & (sum(iv_gini_per_factor$Gini_Negative) <= 0) ){
+        #  gini_result <- "Amber"
+        #}else if( (sum(iv_gini_per_factor$Gini_Negative) >= 1) ){
+        #  gini_result <- "Red"
+        #}else{
+        #  gini_result <- "No RAG status reported"
+        #}
+
+        iv_gini_per_factor$Variable <- as.character(iv_gini_per_factor$Variable)
+        iv_gini_per_factor$IV <- as.numeric(as.character(iv_gini_per_factor$IV))
+        iv_gini_per_factor$Gini <- as.numeric(as.character(iv_gini_per_factor$Gini))
+
+
+        result_vector <- c("Overall RAG Rating", "No RAG status reported", gini_result, 0, 0)
+        iv_gini_per_factor <- rbind(iv_gini_per_factor, result_vector)
+
+        DT::datatable(iv_gini_per_factor[,c(1:3)])%>%
+          formatStyle(
+            'IV',
+            color = styleInterval(c(0.1), c('red', 'green'))) %>%
+          formatStyle(
+            'Gini',
+            color = styleInterval(c(-0.1, 0.1), c('green', 'red', 'green')))
+      }
+
+    })
+
+    output$pd_graph <- renderText({
+      paste("PD Graphs")
+    })
+
+    output$pd_train <- renderPlot({
+      if(input$model_type == "Original"){
+        pd <- predict(step_model, df_train, type = "response")
+        plot(sort(pd),main = "PD for Train Data", ylab  = "PD", xlab = "Count")
+      }else{
+        pd <- predict(new_model(), df_train, type = "response")
+        plot(sort(pd),main = "PD for Train Data", ylab  = "PD", xlab = "Count")
+      }
+    })
+
+    output$pd_test <- renderPlot({
+      if(input$model_type == "Original"){
+        pd <- predict(step_model, df_test, type = "response")
+        plot(sort(pd),main = "PD for Test Data", ylab  = "PD", xlab = "Count")
+      }else{
+        pd <- predict(new_model(), df_test, type = "response")
+        plot(sort(pd),main = "PD for Test Data", ylab  = "PD", xlab = "Count")
+      }
+    })
+
+    output$pd_full <- renderPlot({
+      if(input$model_type == "Original"){
+        pd <- predict(step_model, df_full, type = "response")
+        plot(sort(pd),main = "PD for Overall Data", ylab  = "PD", xlab = "Count")
+      }else{
+        pd <- predict(new_model(), df_full, type = "response")
+        plot(sort(pd),main = "PD for Overall Data", ylab  = "PD", xlab = "Count")
+      }
+    })
+
+    output$gini_header <- renderText({
+      paste("Gini Performance Measure")
+    })
+
+    output$gini_text <- renderText({
+      if(input$model_type == "Original"){
+        gini_train <- ModelMetrics::gini(step_model)
+
+        pd <- predict(step_model, df_train, type = "response")
+        pd_test <- predict(step_model, df_test, type = "response")
+        pd_full <- predict(step_model, df_full, type = "response")
+
+        pred<-prediction(pd,df_train$target)
+        pred_test<-prediction(pd_test,df_test$target)
+        pred_full<-prediction(pd_full,df_full$target)
+
+        auc <- performance(pred, measure="auc")
+        auc_test <- performance(pred_test, measure="auc")
+        auc_full <- performance(pred_full, measure = "auc")
+
+        HTML(paste("The Gini Measure for the training set was", round(gini_train, 2), ".",
+                   "<br/>",
+                   "<br/>",
+                   "The Gini Measure for the test set was", round(2 * auc_test@y.values[[1]] - 1,2), ".",
+                   "<br/>",
+                   "<br/>",
+                   "The Gini Measure for the overall set was", round(2 * auc_full@y.values[[1]] - 1,2), "."))
+      }else{
+        gini_train <- ModelMetrics::gini(new_model())
+
+        pd <- predict(new_model(), df_train, type = "response")
+        pd_test <- predict(new_model(), df_test, type = "response")
+        pd_full <- predict(new_model(), df_full, type = "response")
+
+        pred<-prediction(pd,df_train$target)
+        pred_test<-prediction(pd_test,df_test$target)
+        pred_full<-prediction(pd_full,df_full$target)
+
+        auc <- performance(pred, measure="auc")
+        auc_test <- performance(pred_test, measure="auc")
+        auc_full <- performance(pred_full, measure = "auc")
+
+        HTML(paste("The Gini Measure for the training set was", round(gini_train, 2), ".",
+                   "<br/>",
+                   "<br/>",
+                   "The Gini Measure for the test set was", round(2 * auc_test@y.values[[1]] - 1,2), ".",
+                   "<br/>",
+                   "<br/>",
+                   "The Gini Measure for the overall set was", round(2 * auc_full@y.values[[1]] - 1,2), "."))
+      }
+    })
+
+    output$roc_header <- renderText({
+      paste("ROC Curve Performance Measure")
+    })
+
+    output$roc_text <- renderText({
+      paste("The ROC Curve shown below shows confidence in our model's ability to identify defaults.")
+    })
+
+    output$roc_curve <- renderPlot({
+      if(input$model_type == "Original"){
+
+        pd <- predict(step_model, df_train, type = "response")
+        pd_test <- predict(step_model, df_test, type = "response")
+        pd_full <- predict(step_model, df_full, type = "response")
+
+        pred<-prediction(pd,df_train$target)
+        pred_test<-prediction(pd_test,df_test$target)
+        pred_full<-prediction(pd_full,df_full$target)
+
+        perf <- performance(pred,"tpr","fpr")
+        perf_test <- performance(pred_test,"tpr","fpr")
+        perf_full <- performance(pred_full, "tpr", "fpr")
+
+        plot(perf,
+             main="ROC Curve",
+             col="red")
+        plot(perf_test, col="blue", add=TRUE)
+        plot(perf_full, col="green", add=TRUE)
+        legend("topleft",
+               c("Training", "Test", "Full"),
+               fill=c("red", "blue", "green")
+        )
+        abline(a = 0, b = 1)
+      }else{
+        pd <- predict(new_model(), df_train, type = "response")
+        pd_test <- predict(new_model(), df_test, type = "response")
+        pd_full <- predict(new_model(), df_full, type = "response")
+
+        pred<-prediction(pd,df_train$target)
+        pred_test<-prediction(pd_test,df_test$target)
+        pred_full<-prediction(pd_full,df_full$target)
+
+        perf <- performance(pred,"tpr","fpr")
+        perf_test <- performance(pred_test,"tpr","fpr")
+        perf_full <- performance(pred_full, "tpr", "fpr")
+
+        plot(perf,
+             main="ROC Curve",
+             col="red")
+        plot(perf_test, col="blue", add=TRUE)
+        plot(perf_full, col="green", add=TRUE)
+        legend("topleft",
+               c("Training", "Test", "Full"),
+               fill=c("red", "blue", "green")
+        )
+        abline(a = 0, b = 1)
+      }
+    })
+
+
+
+    ###############################
+    ###############################
+
+    #### Scorecard Server ####
+
+    coef <- reactive({
+
+      new_model_c <- new_model()
+
+      coefs <- new_model_c$coefficients
+      coefs <- as.data.frame(coefs)
+      coefs$variable <- row.names(coefs)
+      coefs <- coefs
+
+    })
+
+    coef_list <- reactive({
+
+      coefs_list <- row.names(coef())
+      coefs_list <- coefs_list
+
+    })
+
+
+
+    scorecard_df <- reactive({
+
+
+      for(i in 2:length(coef_list())) {
+        var_cuts <- cuts[cuts$variable == coef_list()[i], ]
+        var_cuts <- unlist(var_cuts[, 2:4])
+        var_cuts <- as.vector(var_cuts)
+        var_cuts <- as.numeric(var_cuts)
+        var_cuts <- var_cuts[complete.cases(var_cuts)]
+
+        binned <- smbinning.custom(joined_adw_22, y = "target", x = coef_list()[i], cuts = var_cuts)$ivtable
+
+        binned$WoE <- binned$WoE * -1
+
+        assign(paste("woes", coef_list()[i], sep = "_"), binned[1:(nrow(binned)-1), c("Cutpoint","WoE","LnOdds")],
+               envir = globalenv())
+      }
+
+      for(i in 2:length(coef_list())){
+        new_df <- get(paste("woes",coef_list()[i],sep = "_"))
+        new_df$variable <- coef_list()[i]
+        assign(paste("woes", coef_list()[i], sep = "_"),new_df,envir = globalenv())
+      }
+
+      for(i in 2:length(coef_list())) {
+        var_cuts <- cuts[cuts$variable == coef_list()[i], ]
+        var_cuts <- unlist(var_cuts[, 2:4])
+        var_cuts <- as.vector(var_cuts)
+        var_cuts <- as.numeric(var_cuts)
+        var_cuts <- var_cuts[complete.cases(var_cuts)]
+
+        binned <- smbinning.custom(joined_adw_22, y = "target", x = coef_list()[i], cuts = var_cuts)$bands
+
+        assign(paste("bands", coef_list()[i], sep = "_"), binned,
+               envir = globalenv())
+      }
+
+
+      scorecard <- data.frame()
+
+      for(i in 2:length(coef_list())){
+        scorecard <- rbind(scorecard,get(paste("woes",coef_list()[i],sep = "_")))
+      }
+
+      scorecard <- left_join(scorecard,coef(),by = c("variable"))
+
+      scorecard$intercept <- coef()[1,1]
+
+      scorecard_key <- scorecard %>%
+        mutate(factor = 20/log(2,base = exp(1)),
+               offset = 600 - (factor * log(50,base = exp(1))),
+               score = -(coefs * WoE + intercept/(length(coef_list()) - 1)) * factor + offset/(length(coef_list()) - 1))
+
+      scorecard_key <- scorecard_key
+
+    })
+
+
+
+    grade_boundary <- reactive({
+
+      if(input$bin == '5'){
+        band <- c(input$bins_5[1],input$bins_5[2],input$bins_5[3],input$bins_5[4])
+      }else if(input$bin == '6'){
+        band <- c(input$bins_6[1],input$bins_6[2],input$bins_6[3],input$bins_6[4],input$bins_6[5])
+      }else{
+        band <- c(input$bins_7[1],input$bins_7[2],input$bins_7[3],input$bins_7[4],input$bins_7[5],input$bins_7[6])
+      }
+
+      band <- c(0,band)
+
+      df <- data.frame(matrix(nrow = 2, ncol = length(band)))
+
+      for(i in 1:length(band)){
+        df[1,i] <- i
+        df[2,i] <- band[i]
+      }
+
+      df <- df
+
+    })
+
+    scorecard_scores <- reactive({
+
+      built_scorecard <- full_data_train[,c(input$remove_var,"target","symbol","date")]
+
+      for(j in 1:(ncol(built_scorecard)-3)){
+        for(i in 1:nrow(built_scorecard)){
+          score_new <- scorecard_df() %>%
+            filter(variable %in% colnames(built_scorecard)[j])
+          bin <- which(built_scorecard[i,j] == score_new$WoE)
+          built_scorecard[i,j] <- score_new$score[bin]
+        }
+      }
+
+      built_scorecard  <- built_scorecard %>%
+        mutate(Score = rowSums(built_scorecard[,c(1:(ncol(built_scorecard)-3))]))
+
+      built_scorecard  <- built_scorecard %>%
+        filter(is.finite(Score))
+
+      built_scorecard <- built_scorecard
+
+      bounds <- grade_boundary()
+
+      if(input$bin == 5){
+        built_scorecard <- built_scorecard %>%
+          mutate(Grade = ifelse(Score < bounds[2,2],1,ifelse(Score < bounds[2,3],2,ifelse(Score < bounds[2,4],3,
+                                                                                          ifelse(Score < bounds[2,5],4,5)))))
+      }else if(input$bin == 6){
+        built_scorecard <- built_scorecard %>%
+          mutate(Grade = ifelse(Score < bounds[2,2],1,ifelse(Score < bounds[2,3],2,ifelse(Score < bounds[2,4],3,
+                                                                                          ifelse(Score < bounds[2,5],4,ifelse(Score < bounds[2,6],5,6))))))
+      }else{
+        built_scorecard <- built_scorecard %>%
+          mutate(Grade = ifelse(Score < bounds[2,2],1,ifelse(Score < bounds[2,3],2,ifelse(Score < bounds[2,4],3,
+                                                                                          ifelse(Score < bounds[2,5],4,ifelse(Score < bounds[2,6],5,ifelse(Score < bounds[2,7],6,7)))))))
+      }
+
+      built_scorecard <- built_scorecard
+
+    })
+
+
+
+    stability_data_raw <- reactive({
+
+      v_cuts <- grade_boundary()
+
+      psi_full <- data.frame()
+
+      for(i in 1:length(v_years_2)){
+        psi_full <- rbind(psi_full,try({before_psi_c(scorecard_scores(),i,"Score",input$bin,v_cuts[2,2],v_cuts[2,3],ifelse(!is.na(v_cuts[2,4]),v_cuts[2,4],NA),
+                                                     ifelse(!is.na(v_cuts[2,5]),v_cuts[2,5],NA),ifelse(!is.na(v_cuts[2,6]),v_cuts[2,6],NA),
+                                                     ifelse(!is.na(v_cuts[2,7]),v_cuts[2,7],NA))}))
+      }
+
+      psi_full <- psi_full %>%
+        filter(!(Cutpoint %in% c("Missing","Total")))
+
+      psi_full <- psi_full
+
+    })
+
+    stability_data_pct <- reactive({
+
+      psi_full <- stability_data_raw()
+
+      if(input$bin == 3){
+        psi_test_frame <- data.frame(matrix(ncol = (input$bin + 1),nrow = length(v_years_2)))
+        colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3")
+
+        for(i in 1:(nrow(psi_full)/3)){
+
+          psi_test_frame$Date[i] <- year(psi_full[(3*i -2),1])
+          psi_test_frame$group_1[i] <- psi_full[(3*i - 2),3]
+          psi_test_frame$group_2[i] <- psi_full[(3*i - 1),3]
+          psi_test_frame$group_3[i] <- psi_full[(3*i),3]
+        }
+
+        psi_test_frame <- psi_test_frame
+
+      }else if(input$bin == 4){
+        psi_test_frame <- data.frame(matrix(ncol = (input$bin + 1),nrow = length(v_years_2)))
+        colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3","group_4")
+
+        for(i in 1:(nrow(psi_full)/4)){
+
+          psi_test_frame$Date[i] <- year(psi_full[(4*i -3),1])
+          psi_test_frame$group_1[i] <- psi_full[(4*i - 3),3]
+          psi_test_frame$group_2[i] <- psi_full[(4*i - 2),3]
+          psi_test_frame$group_3[i] <- psi_full[(4*i - 1),3]
+          psi_test_frame$group_4[i] <- psi_full[(4*i),3]
+
+        }
+
+        psi_test_frame <- psi_test_frame
+      }else if(input$bin == 5){
+        psi_test_frame <- data.frame(matrix(ncol = (input$bin + 1),nrow = length(v_years_2)))
+        colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3","group_4","group_5")
+
+        for(i in 1:(nrow(psi_full)/5)){
+
+          psi_test_frame$Date[i] <- year(psi_full[(5*i -4),1])
+          psi_test_frame$group_1[i] <- psi_full[(5*i - 4),3]
+          psi_test_frame$group_2[i] <- psi_full[(5*i - 3),3]
+          psi_test_frame$group_3[i] <- psi_full[(5*i - 2),3]
+          psi_test_frame$group_4[i] <- psi_full[(5*i - 1),3]
+          psi_test_frame$group_5[i] <- psi_full[(5*i),3]
+
+        }
+
+        psi_test_frame <- psi_test_frame
+      }else if(input$bin == 6){
+        psi_test_frame <- data.frame(matrix(ncol = (input$bin + 1),nrow = length(v_years_2)))
+        colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3","group_4","group_5","group_6")
+
+        for(i in 1:(nrow(psi_full)/6)){
+
+          psi_test_frame$Date[i] <- year(psi_full[(6*i -5),1])
+          psi_test_frame$group_1[i] <- psi_full[(6*i - 5),3]
+          psi_test_frame$group_2[i] <- psi_full[(6*i - 4),3]
+          psi_test_frame$group_3[i] <- psi_full[(6*i - 3),3]
+          psi_test_frame$group_4[i] <- psi_full[(6*i - 2),3]
+          psi_test_frame$group_5[i] <- psi_full[(6*i - 1),3]
+          psi_test_frame$group_6[i] <- psi_full[(6*i),3]
+
+        }
+
+        psi_test_frame <- psi_test_frame
+      }else{
+        psi_test_frame <- data.frame(matrix(ncol = (input$bin + 1),nrow = length(v_years_2)))
+        colnames(psi_test_frame) <- c("Date","group_1","group_2","group_3","group_4","group_5","group_6","group_7")
+
+        for(i in 1:(nrow(psi_full)/7)){
+
+          psi_test_frame$Date[i] <- year(psi_full[(7*i -6),1])
+          psi_test_frame$group_1[i] <- psi_full[(7*i - 6),3]
+          psi_test_frame$group_2[i] <- psi_full[(7*i - 5),3]
+          psi_test_frame$group_3[i] <- psi_full[(7*i - 4),3]
+          psi_test_frame$group_4[i] <- psi_full[(7*i - 3),3]
+          psi_test_frame$group_5[i] <- psi_full[(7*i - 2),3]
+          psi_test_frame$group_6[i] <- psi_full[(7*i - 1),3]
+          psi_test_frame$group_7[i] <- psi_full[(7*i),3]
+
+        }
+
+        psi_test_frame <- psi_test_frame
+      }
+      psi_test_frame <- psi_test_frame
+    })
+
+
+    psi_data <- reactive({
+
+      psi_test_frame <- stability_data_pct()
+
+      if(input$psi_type %in% c("Base")){
+        psi_transpose <- psi_woe_bins_score(psi_test_frame, input$bin, length(v_years_2))
+      }else{
+        psi_transpose <- psi_rolling_bins(psi_test_frame, input$bin, length(v_years_2))
+      }
+      psi_transpose <- psi_transpose
+    })
+
+
+
+
+    output$stability_plot <- renderPlot({
+
+      data <- stability_data_raw()
+
+      g <- ggplot(data, aes(x = Year,y=PctRec*100,fill=factor(Cutpoint,levels = Cutpoint[input$bin:1])))+
+        geom_bar(stat="identity") +
+        ggtitle("Stability of population of groups over time") +
+        ylab("Percentage") +
+        theme(strip.background =element_rect(fill="white"))+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+
+      if(input$bin == 3){
+        g +
+          scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red"),.3))
+      }else if(input$bin == 4){
+        g +
+          scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red","Purple"),.3))
+      }else if(input$bin == 5){
+        g +
+          scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red","Purple","Blue"),.3))
+
+      }else if(input$bin == 6){
+        g +
+          scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red","Purple","Blue","Yellow"),.3))
+      }else{
+        g +
+          scale_fill_manual("Percentage of Population", values = alpha(c("Green","Darkorange","Red","Purple","Blue","Yellow","Pink"),.3))
+      }
+    })
+
+    output$psi_plot <- renderPlot({
+
+      ggplot(data = psi_data(), aes(x = date, y = PSI))+
+        geom_point() +
+        geom_line(stat = "identity") +
+        ggtitle("PSI over time") +
+        xlab("Year") +
+        theme(strip.background =element_rect(fill="white"))+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+
+    })
+
+
+    output$export_data <- downloadHandler(
+      filename = function(){"scorecard_scores.csv"},
+      content = function(fname){write.csv(scorecard_scores(), fname)
+      }
+    )
+
+    #### Plot of Score broken down by default ###
+
+    output$scorecard_distribution <- renderPlot({
+
+      input$update
+
+      built_scorecard <- isolate(scorecard_scores())
+      built_scorecard$target <- factor(built_scorecard$target)
+
+      g <- ggplot(built_scorecard, aes(x = Score, fill = target)) +
+        geom_density(alpha=.3)+
+        ggtitle("Scorecard Distribution - Density Plot") +
+        xlab("Score")+
+        ylab("Count")+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+
+      if(input$bin == 5){
+        isolate(g+
+                  geom_vline(xintercept = input$bins_5[1],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_5[2],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_5[3],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_5[4],linetype = "dashed"))
+
+      }else if(input$bin == 6){
+        isolate(g+
+                  geom_vline(xintercept = input$bins_6[1],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[2],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[3],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[4],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[5],linetype = "dashed"))
+
+      }else{
+        isolate(g+
+                  geom_vline(xintercept = input$bins_7[1],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[2],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[3],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[4],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[5],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[6],linetype = "dashed"))
+      }
+
+    })
+
+
+    output$scorecard_histogram <- renderPlot({
+
+      input$update
+
+      built_scorecard <- isolate(scorecard_scores())
+      built_scorecard$target <- factor(built_scorecard$target)
+
+      g <- ggplot(built_scorecard, aes(x = Score, fill = target)) +
+        geom_histogram(alpha=.3)+
+        ggtitle("Scorecard Distribution - Histogram") +
+        xlab("Score")+
+        ylab("Count")+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+
+      if(input$bin == 5){
+        isolate(g+
+                  geom_vline(xintercept = input$bins_5[1],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_5[2],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_5[3],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_5[4],linetype = "dashed"))
+
+      }else if(input$bin == 6){
+        isolate(g+
+                  geom_vline(xintercept = input$bins_6[1],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[2],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[3],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[4],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_6[5],linetype = "dashed"))
+
+      }else{
+        isolate(g+
+                  geom_vline(xintercept = input$bins_7[1],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[2],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[3],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[4],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[5],linetype = "dashed")+
+                  geom_vline(xintercept = input$bins_7[6],linetype = "dashed"))
+      }
+
+    })
+
+
+
+    ### Scorecard arguments ####
+
+    output$scorecard_table <- DT::renderDataTable({
+
+      input$update
+
+      data <- isolate(scorecard_scores())
+
+      for(i in 1:nrow(data)){
+        for(j in 1:ncol(data)){
+          if(is.numeric(data[i,j])){
+            data[i,j] <- round(data[i,j],2)
+          }else{
+            data[i,j] <- data[i,j]
+          }
+        }
+      }
+
+      data <- data
+
+      DT::datatable(data)
+
+    })
+
+
+
+
+    ## Grading system ##
+    ## Split into 4 groups in order of defaults/score
+
+
+    v_cut <- reactive({
+      if(input$bin == "5"){
+        v_cuts <- c(input$bins_5)
+      }else if(input$bin == "6"){
+        v_cuts <- c(input$bins_6)
+      }else{
+        v_cuts <- c(input$bins_7)
+      }
+      v_cuts <- v_cuts
+    })
+
+    grade <- reactive({
+
+      grades <- scorecard_scores()[,c("Score","target")]
+
+      grades <- grades %>%
+        mutate(Default_r = ifelse(target == 1,1,0),
+               Performing = ifelse(target == 1,0,1))
+
+      grades_final <- grades %>%
+        dplyr::select(Score,Default_r,Performing)
+
+
+      grade_grouping <- smbinning.custom(grades_final, "Default_r","Score",cuts = v_cut())
+
+      grade_table <- data.frame(matrix(nrow = input$bin, ncol = 6))
+      colnames(grade_table) <- c("grade", "score_from","score_to","default","performing","default_rate")
+
+      grade_table$grade <- c(1:input$bin)
+
+      grade_table$score_from[1] <- 0
+
+      grade_table$score_from[2:input$bin] <- grade_grouping$bands[2:input$bin]
+
+      grade_table$score_to[1:input$bin] <- grade_grouping$bands[2:(input$bin + 1)]
+
+      grade_table$default <- grade_grouping$ivtable$CntGood[1:input$bin]
+
+      grade_table$performing <- grade_grouping$ivtable$CntBad[1:input$bin]
+
+      grade_table$default_rate <- grade_grouping$ivtable$GoodRate[1:input$bin]
+
+      grade_table <- grade_table %>%
+        mutate(total = default + performing)
+
+      grade_table <- grade_table
+
+    })
+
+
+    ## Summary ##
+
+    output$scorecard_summary <- DT::renderDataTable({
+
+      input$update
+
+      data <- isolate(grade())
+
+      DT::datatable(data)
+    })
+
+    ## Default Plot ##
+
+    output$default_rate_plot <- renderPlot({
+
+      input$update
+
+      data <- isolate(grade())
+
+      ggplot(data , aes(x = grade, y = default_rate)) +
+        geom_bar(stat = "identity") +
+        ggtitle("Default Rate Across Grades")+
+        xlab("Group")+
+        ylab("Default Rate")+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+
+    })
+
+
+
+
+    ### One period ###
+
+    pluto_tache_one <-reactive({
+
+      data <- grade()
+
+      df <- data.frame(
+        c(1:input$bin),
+        data$total,
+        PTOnePeriodPD(data$total, data$default, conf.interval = 0.5),
+        PTOnePeriodPD(data$total, data$default, conf.interval = 0.75),
+        PTOnePeriodPD(data$total, data$default, conf.interval = 0.9),
+        PTOnePeriodPD(data$total, data$default, conf.interval = 0.95),
+        PTOnePeriodPD(data$total, data$default, conf.interval = 0.99),
+        PTOnePeriodPD(data$total, data$default, conf.interval = 0.999)
+      )
+
+      colnames(df) <- c("Rating Grade","N Obs","50%","75%","90%","95%","99%","99.9%")
+
+      df <- df
+
+      for(i in 1:nrow(df)){
+        for(j in 1:ncol(df)){
+          if(is.numeric(df[i,j])){
+            df[i,j] <- round(df[i,j],2)
+          }else{
+            df[i,j] <- df[i,j]
+          }
+        }
+      }
+
+      df <- df
+
+    })
+
+    output$pluto_one <- DT::renderDataTable({
+
+      input$update
+
+      data <- isolate(pluto_tache_one())
+
+      DT::datatable(data)
+
+    })
+
+    ### Multi period ###
+
+    pluto_tache_multi <- reactive({
+
+      data <- grade()
+
+      df <- data.frame(
+        c(1:input$bin),
+        data$total,
+        PTMultiPeriodPD(data$total, data$default, 0.3, cor.St = 0.3, kT = 5, kNS = 1000,  conf.interval = 0.5),
+        PTMultiPeriodPD(data$total, data$default, 0.3, cor.St = 0.3, kT = 5, kNS = 1000, conf.interval = 0.75),
+        PTMultiPeriodPD(data$total, data$default, 0.3, cor.St = 0.3, kT = 5, kNS = 1000, conf.interval = 0.9),
+        PTMultiPeriodPD(data$total, data$default, 0.3, cor.St = 0.3, kT = 5, kNS = 1000, conf.interval = 0.95),
+        PTMultiPeriodPD(data$total, data$default, 0.3, cor.St = 0.3, kT = 5, kNS = 1000, conf.interval = 0.99),
+        PTMultiPeriodPD(data$total, data$default, 0.3, cor.St = 0.3, kT = 5, kNS = 1000, conf.interval = 0.999)
+      )
+
+      colnames(df) <- c("Rating Grade","N Obs","50%","75%","90%","95%","99%","99.9%")
+
+      df <- df
+
+      for(i in 1:nrow(df)){
+        for(j in 1:ncol(df)){
+          if(is.numeric(df[i,j])){
+            df[i,j] <- round(df[i,j],2)
+          }else{
+            df[i,j] <- df[i,j]
+          }
+        }
+      }
+
+      df <- df
+
+    })
+
+    output$pluto_multi <- DT::renderDataTable({
+
+      input$update
+
+      data <- isolate(pluto_tache_multi())
+
+      DT::datatable(data)
+
+    })
+
+
+
+    ### GRADE MIGRATION ###
+
+    grade_migration_df <- reactive({
+
+      data <- scorecard_scores()
+
+      test_set <- data %>%
+        select(date,symbol,Grade)
+
+      test_set$Grade <- as.numeric(test_set$Grade)
+      test_set$date <-  as.Date(test_set$date, format = "%d/%m/%Y")
+
+      test_set <- reshape::cast(test_set, symbol~date,sum, fill = 0)
+
+      for(i in 1:nrow(test_set)){
+        for(j in 1:ncol(test_set)){
+          if(test_set[i,j] == 0){
+            test_set[i,j] <- NA
+          }else{
+            test_set[i,j] <- test_set[i,j]
+          }
+        }
+      }
+
+      test_set <- test_set
+
+      blank_df <- data.frame(matrix(nrow = (ncol(test_set)-2), ncol = 4))
+
+      colnames(blank_df) <- c("date","same","one","two")
+
+      for(j in 1:(ncol(test_set)-2)){
+
+        test_one <- test_set[,c(1,j+1,j+2)] %>%
+          dplyr::mutate(Diff = test_set[,c(j+1)] - test_set[,c(j+2)])
+
+        test_two <- table(test_one$Diff)
+        test_two <- as.data.frame(test_two)
+
+        test_two$Var1 <- as.numeric(as.character(test_two$Var1))
+
+        same <- 0
+        one <- 0
+        two <- 0
+
+        for(i in 1:nrow(test_two)){
+
+          if(abs(test_two[i,1]) >= 2){
+            two <- two + test_two$Freq[i]
+          }else if(abs(test_two[i,1]) == 1){
+            one <- one + test_two$Freq[i]
+          }else{
+            same <- same + test_two$Freq[i]
+          }
+        }
+
+
+
+        blank_df$date[j] <- colnames(test_set)[j+2]
+        blank_df$same[j] <- round(same/(same+one+two),2)
+        blank_df$one[j] <- round(one/(same+one+two),2)
+        blank_df$two[j] <- round(two/(same+one+two),2)
+
+      }
+
+      blank_df <- blank_df %>%
+        mutate(Result = ifelse(two > 0.3,"Red",ifelse(one > 0.3,"Amber","Green")))
+
+      blank_df <- blank_df
+    })
+
+
+
+    output$grade_migration_table <- DT::renderDataTable({
+
+      data <- grade_migration_df()
+
+      DT::datatable(data)
+    })
+
+
+
+    ###############################
+
+    #### Validation Server ####
+    output$valid_head <- renderText({
+      if(input$valid_type == "Model Discrimination"){
+        paste("Model Discrimination")
+      } else if(input$model_type == "Jeffrey") {
+        paste("Jeffrey Test")
+      }else{
+        paste("Grade Stability Tests")
+      }
+    })
+
+    output$valid_descr <- renderText({
+      if(input$valid_type == "Model Discrimination"){
+        HTML(paste("The Discrimination of a model is used to assess a model's ability to differentiate between defaulting and non-defaulting
+                 obligors.",
+                   "We are using the Gini coefficient to do this. This is a measure of the predictive power of a model across all possible
+                 scores by comparing the actual discrimination of the model with that of a random model. A Gini value of 1 indicates
+                 perfect discrimination, while 0 indicates no discrimination.",
+                   "The formal test we are conducting is that the Gini of the Test dataset is >= the Gini of the Development dataset * 0.8.",
+                   sep = "<br/>"))
+      } else if(input$valid_type == "Jeffrey") {
+        HTML(paste("The Jeffrey test in essence is a Bayesian challenger model approach to testing the frequentist PD model estimate.
+      The objective of the Jeffrey test is to compare the estimated probability of default with observed defaults in a binomial model
+      with independent observations, using hypothesis testing. Jeffrey test is a one- sided lower tailed test which rejects the null
+      hypothesis if the test static is smaller than the critical value given a level of significance, eg. ÃÂ± = 5%.
+      The conclusion under hypothesis testing is based on the selected level of significance and could change with a different level of
+      significance.",
+                   "The null hypothesis under Jeffreys test is that the portfolio PD at the beginning of the relevant observation period
+                 greater than the true one.",
+                   "Null hypothesis, Ho: True probability of default < Estimated probability of default.",
+                   "Alternative Hypothesis, H1: True probability of default > Estimated probability of default.", sep = "<br/>"))
+      }else{
+        HTML(paste("Grade Stability tests are a way to assess how the population behaviour changes year on year in respect to the makeup of their grade.
+                 The tests below are indicators of identifying periods that experienced drastic change in a particular grade, or on an overall level.",
+                   "The Stability Plot shows how grades behave year on year and is a clear visulation of what is happening with each grade.",
+                   "The PSI Plot displays how the grades behave as a whole from the initial starting point and how they change year on year.",
+                   "The Grade Migration table uses the following assesment to grade the behaviour of the grades," ,
+                   "if 30% of the population goes up/down two or more grades, it is a red rating,",
+                   "if 30% of the population goes up/down one grade, it is an amber rating,",
+                   "if it doesn't meet any of the above criteria, it is a green rating.",sep = "<br/>"))
+      }
+    })
+
+    gini_data <- reactive({
+
+      gini_train <- ModelMetrics::gini(new_model())
+      pd <- predict(new_model(), valid_train, type = "response")
+      pd_test <- predict(new_model(), valid_test, type = "response")
+      pd_full <- predict(new_model(), valid_full, type = "response")
+
+      pred<-prediction(pd,df_train$target)
+      pred_test<-prediction(pd_test,df_test$target)
+      pred_full<-prediction(pd_full,df_full$target)
+
+      auc <- performance(pred, measure="auc")
+      auc_test <- performance(pred_test, measure="auc")
+      auc_full <- performance(pred_full, measure = "auc")
+
+      gini_train <- round(gini_train, 2)
+      gini_test <- round(2 * auc_test@y.values[[1]] - 1,2)
+      gini_full <- round(2 * auc_full@y.values[[1]] - 1,2)
+
+      ginis <- data.frame(matrix(ncol = 1, nrow = 3))
+      rownames(ginis) <- c("Train", "Test", "Full")
+      colnames(ginis) <- c("Gini_score")
+
+      ginis$Gini_score <- c(gini_train, gini_test, gini_full)
+      colnames(ginis) <- "Gini Score"
+
+      ginis <- ginis
+    })
+
+    output$ginis <- DT::renderDataTable({
+      ginis <- gini_data()
+      DT::datatable(ginis)
+    })
+
+    test_react <- reactive({
+
+      gini_train <- ModelMetrics::gini(new_model())
+      pd <- predict(new_model(), valid_train, type = "response")
+      pd_test <- predict(new_model(), valid_test, type = "response")
+
+      pred<-prediction(pd,df_train$target)
+      pred_test<-prediction(pd_test,df_test$target)
+
+      auc <- performance(pred, measure="auc")
+      auc_test <- performance(pred_test, measure="auc")
+
+      gini_train <- round(gini_train, 2)
+      gini_test <- round(2 * auc_test@y.values[[1]] - 1,2)
+
+      test_gini <- data.frame(matrix(ncol = 3, nrow = 1))
+      colnames(test_gini) <- c("one", "two", "three")
+
+      test_gini$one <- gini_test
+      test_gini$two <- gini_train * 0.8
+      test_gini$three <- ifelse(test_gini$one >= test_gini$two, "PASS", "FAIL")
+
+      colnames(test_gini) <- c("Gini Test", "Gini(Dev) * 0.8", "Result")
+
+      test_gini <- test_gini
+    })
+
+    output$gini_test <- DT::renderDataTable({
+      discr <- test_react()
+      DT::datatable(discr)
+    })
+
+    gini_time_data <- reactive({
+      if(input$data == "Train") {
+        time <- valid_train
+      } else if(input$data == "Test") {
+        time <- valid_test
+      } else {
+        time <- valid_full
+      }
+      time <- time
+
+      empty <- data.frame()
+
+      for(i in 1:length(v_years)) {
+        time_filt <- time %>%
+          filter(date == v_years[i])
+
+        pd <- predict(new_model(), time_filt, type = "response")
+        pred<-prediction(pd, time_filt$target)
+        auc <- performance(pred, measure="auc")
+
+        gini <- round(2 * auc@y.values[[1]] - 1,2)
+
+        empty <- rbind(empty, gini)
+      }
+
+      empty <- empty
+
+      colnames(empty) <- c("gini")
+      empty$date <- v_years
+
+      empty <- empty
+    })
+
+    output$gini_time <- renderPlotly({
+      data <- gini_time_data()
+
+      ggplotly(ggplot(data, aes(x = date, y = gini)) +
+                 geom_line() +
+                 ggtitle("Gini of Model through time"))
+    })
+
+    jeffrey_data <- reactive({
+
+      pd_train <- predict(new_model(), valid_train, type = "response")
+      valid_train$pd <- pd_train
+
+      pd_test <- predict(new_model(), valid_test, type = "response")
+      valid_test$pd <- pd_test
+
+      pd_full <- predict(new_model(), valid_full, type = "response")
+      valid_full$pd <- pd_full
+
+      jeffrey_train <- f_jeffrey_test(valid_train)
+      jeffrey_test <- f_jeffrey_test(valid_test)
+      jeffrey_full <- f_jeffrey_test(valid_full)
+
+      jeffrey_data <- rbind(jeffrey_train, jeffrey_test, jeffrey_full)
+      jeffrey_data <- jeffrey_data
+
+    })
+
+    output$jeffrey <- DT::renderDataTable({
+      data <- jeffrey_data()
+      DT::datatable(data)
+    })
+
+
+    ###############################
+  }
+
+}
+
+
+## Scorecard stability functions
+
+##### UPDATED FUNCTIONS ####
+
+before_psi_c <- function(data,year,variable,bins,cut1,cut2= NA,cut3 = NA,cut4 = NA, cut5 = NA, cut6 = NA){
+
+  psi_data <- data
+
+  psi_data$date <- as.Date(psi_data$date, format = "%d/%m/%Y")
+
+  psi_train <- psi_data %>%
+    select("date", "Score", "target")
+
+  psi_data <- psi_train %>%
+    filter(date %in% v_years_2[year])
+
+  psi_data <- psi_data %>%
+    filter(!is.na(psi_data[,"Score"]))
+
+  psi_data$Score <- as.numeric(psi_data$Score)
+
+  psi_data$target <- as.numeric(psi_data$target)
+
+  psi_data <- as.data.frame(psi_data)
+
+  if(bins == 3){
+    result <- smbinning.custom(psi_data, "target","Score",c(cut1,cut2))
+  }else if(bins == 2){
+    result <- smbinning.custom(psi_data, "target","Score",c(cut1))
+  }else if(bins == 4){
+    result <- smbinning.custom(psi_data, "target","Score",c(cut1,cut2,cut3))
+  }else if(bins == 5){
+    result <- smbinning.custom(psi_data, "target","Score",c(cut1,cut2,cut3,cut4))
+  }else if(bins == 6){
+    result <- smbinning.custom(psi_data, "target","Score",c(cut1,cut2,cut3,cut4,cut5))
+  }else{
+    result <- smbinning.custom(psi_data, "target","Score",c(cut1,cut2,cut3,cut4,cut5,cut6))
+  }
+  result <- result$ivtable
+
+  result <- result %>%
+    select(Cutpoint, PctRec, GoodRate) %>%
+    dplyr::rename(BadRate = GoodRate)
+
+  result$Year <- v_years_2[year]
+
+  result <- result %>%
+    select(Year,Cutpoint,PctRec,BadRate)
+
+  result <- result
+  return(result)
+
+}
+
+psi_woe_bins_score <- function(data,bins,no_years){
+
+  psi_test_frame <- data
+
+  act_exp <- data.frame(matrix(nrow = (no_years-1), ncol = (bins + 1)))
+
+  for(i in 2:(no_years)){
+    for(j in 2:(bins+1)){
+      act_exp[(i-1),j] <- psi_test_frame[1,j] - psi_test_frame[i,j]
+    }
+  }
+
+  act_exp[,1] <- psi_test_frame[c(2:no_years),1]
+  colnames(act_exp) <- colnames(psi_test_frame)
+
+  log_table <- data.frame(matrix(nrow = (no_years - 1),ncol=(bins+ 1)))
+
+  for(i in 2:no_years){
+    for(j in 2:(bins+1)){
+
+      log_table[(i-1),j] <- log((psi_test_frame[1,j] / psi_test_frame[i,j]),base = exp(1))
+
+    }
+  }
+
+  log_table[,1] <- act_exp[,1]
+  colnames(log_table) <- colnames(act_exp)
+
+  psi_single <- log_table[,c(2:(bins+ 1))] * act_exp[,c(2:(bins+ 1))]
+
+  psi_final <- data.frame(rowSums(psi_single))
+
+  psi_dates <- v_years_2[2:no_years]
+
+  psi_final <- cbind(psi_dates,psi_final)
+
+  psi_final[,2] <- round(psi_final[,2],2)
+
+  colnames(psi_final) <- c("date","PSI")
+
+  psi_final <- psi_final
+
+  return(psi_final)
+}
+
+psi_rolling_bins <- function(data, bins, no_years){
+
+  psi_test_frame <- data
+
+  act_exp <- data.frame(matrix(nrow = (no_years-1), ncol = (bins + 1)))
+
+  for(i in 2:(no_years)){
+    for(j in 2:(bins+1)){
+      act_exp[(i-1),j] <- psi_test_frame[i-1,j] - psi_test_frame[i,j]
+    }
+  }
+
+  act_exp[,1] <- psi_test_frame[c(2:no_years),1]
+  colnames(act_exp) <- colnames(psi_test_frame)
+
+  log_table <- data.frame(matrix(nrow = (no_years - 1),ncol=(bins+ 1)))
+
+  for(i in 2:no_years){
+    for(j in 2:(bins+1)){
+
+      log_table[(i-1),j] <- log((psi_test_frame[i-1,j] / psi_test_frame[i,j]),base = exp(1))
+
+    }
+  }
+
+  log_table[,1] <- act_exp[,1]
+  colnames(log_table) <- colnames(act_exp)
+
+  psi_single <- log_table[,c(2:(bins+ 1))] * act_exp[,c(2:(bins+ 1))]
+
+  psi_final <- data.frame(rowSums(psi_single))
+
+  psi_dates <- v_years_2[2:no_years]
+
+  psi_final <- cbind(psi_dates,psi_final)
+
+  psi_final[,2] <- round(psi_final[,2],2)
+
+  colnames(psi_final) <- c("date","PSI")
+
+  psi_final <- psi_final
+
+  return(psi_final)
+
+}

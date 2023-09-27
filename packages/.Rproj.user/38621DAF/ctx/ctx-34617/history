@@ -1,0 +1,512 @@
+library(skimr)
+library(naniar)
+library(visdat)
+library(purrr)
+library(rvest)
+library(StatMeasures)
+library(na.tools)
+library(lubridate)
+library(shinymanager)
+library(shinyauthr)
+library(sodium)
+library(ggjoy)
+library(readr)
+library(tidyr)
+library(GTquantrisk)
+################################
+mapping <- GTquantrisk::mapping
+industry <- GTquantrisk::industry
+t_definitions <- GTquantrisk::t_definitions
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+initial_data <- initial_data %>%
+mutate_at(vars(-Dates, -Year, -symbol), as.numeric)
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+initial_data <- initial_data[,c(1:ncol(initial_data))]
+dates <- initial_data$Dates
+View(initial_data)
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+View(initial_data)
+library(dplyr)
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+initial_data <- initial_data[,c(1:ncol(initial_data))]
+dates <- initial_data$Dates
+step_1 <- f_standard_clean_final(initial_data)
+step_2 <- f_remove_wrong(step_1)
+View(step_1)
+View(step_2)
+step_3 <- f_binded_data(step_2)
+View(step_3)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3,"no")
+View(step_4)
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+initial_data <- initial_data %>%
+mutate_at(vars(-Dates, -Year, -symbol), as.numeric)
+initial_data <- setdiff(colnames(data), c("Dates", "Year", "symbol"))
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+initial_data <- setdiff(colnames(data), c("Dates", "Year", "symbol"))
+# Loop through numeric columns and convert to numeric
+for (col in initial_data) {
+data[, col] <- as.numeric(gsub("[^0-9.]", "", data[, col]))
+}
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+# Loop through numeric columns and convert to numeric
+for (col in initial_data) {
+data[, col] <- as.numeric(gsub("[^0-9.]", "", data[, col]))
+}
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+initial_data <- setdiff(colnames(initial_data), c("Dates", "Year", "symbol"))
+# Loop through numeric columns and convert to numeric
+for (col in initial_data) {
+initial_data[, col] <- as.numeric(gsub("[^0-9.]", "", initial_data[, col]))
+}
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+# Loop through numeric columns and convert to numeric
+for (col in initial_data) {
+initial_data[, col] <- as.numeric(gsub("[^0-9.]", "", initial_data[, col]))
+}
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+initial_data <- mutate_all(initial_data, as.numeric)
+View(initial_data)
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+initial_data <- initial_data[,c(1:ncol(initial_data))]
+dates <- initial_data$Dates
+step_1 <- f_standard_clean_final(initial_data)
+View(step_1)
+step_2 <- f_remove_wrong(step_1)
+View(step_2)
+step_3 <- f_binded_data(step_2)
+View(step_3)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+View(step_4)
+step_5 <- f_ratio(step_4, step_3,"no")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/prov_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+View(initial_data)
+library(dplyr)
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+initial_data <- initial_data[,c(1:ncol(initial_data))]
+dates <- initial_data$Dates
+step_1 <- f_standard_clean_final(initial_data)
+step_2 <- f_remove_wrong(step_1)
+View(step_1)
+View(step_2)
+step_3 <- f_binded_data(step_2)
+View(step_3)
+step_3 <- f_binded_data(step_2)
+View(step_3)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3,"no")
+## Instructions for use ##
+# 1. Change path in line 7 and line 44 to the respective path in user folder
+# 2. Ctrl a then Ctrl enter
+################################
+library(devtools)
+install.packages("/Users/aherraez/Downloads/financial-tool/packages/GTquantrisk_0.1.0.tar.gz", repos=NULL, type="source")
+install.packages("/Users/aherraez/Downloads/financial-tool/packages/StatMeasures_1.0.tar.gz", repos=NULL, type="source")
+################################
+library(janitor)
+library(dlookr)
+library(readxl)
+library(shiny)
+library(DT)
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+library(shinydashboard)
+library(shinyjs)
+library(RColorBrewer)
+library(dlookr)
+library(corrplot)
+library(lessR)
+library(plotly)
+library(skimr)
+library(naniar)
+library(visdat)
+library(purrr)
+library(rvest)
+library(StatMeasures)
+library(na.tools)
+library(lubridate)
+library(shinymanager)
+library(shinyauthr)
+library(sodium)
+library(ggjoy)
+library(readr)
+library(tidyr)
+library(GTquantrisk)
+################################
+mapping <- GTquantrisk::mapping
+industry <- GTquantrisk::industry
+t_definitions <- GTquantrisk::t_definitions
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/initial_data.csv")
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/short_test.csv")
+initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+initial_data <- initial_data[,c(1:ncol(initial_data))]
+dates <- initial_data$Dates
+step_1 <- f_standard_clean_final(initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+#see how data changes from step 3 (good) to step 4 (NA)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3,"no")step_6 <- f_reshape(step_5)
+View(step_4)
+View(step_3)
+############
+install.packages("/Users/aherraez/Downloads/GTModelMonitoring/GTModelMonitoringLib_0.1.0.tar.gz", repos = NULL, type="source")
+install.packages("dashboardthemes")
+install.packages("flextable")
+install.packages("ModelMetrics")
+install.packages("pROC")
+library(pROC)
+library(ModelMetrics)
+library(flextable)
+library(shiny)
+library(shinydashboard)
+library(plotly)
+library(scales)
+library(dplyr)
+library(DT)
+library(shinyauthr)
+library(glue)
+library(RSQLite)
+library(DBI)
+library(lubridate)
+library(GTModelMonitoringLib)
+library(shinylogs)
+# How many days should sessions last?
+cookie_expiry <- 7
+# This function must return a data.frame with columns user and sessionid.  Other columns are also okay
+# and will be made available to the app after log in.
+get_sessions_from_db <- function(conn = db, expiry = cookie_expiry) {
+dbReadTable(conn, "sessions") %>%
+mutate(login_time = ymd_hms(login_time)) %>%
+as_tibble() %>%
+filter(login_time > now() - days(expiry))
+}
+# This function must accept two parameters: user and sessionid. It will be called whenever the user
+# successfully logs in with a password.
+add_session_to_db <- function(user, sessionid, conn = db) {
+tibble(user = user, sessionid = sessionid, login_time = as.character(now())) %>%
+dbWriteTable(conn, "sessions", ., append = TRUE)
+}
+db <- dbConnect(SQLite(), ":memory:")
+dbCreateTable(db, "sessions", c(user = "TEXT", sessionid = "TEXT", login_time = "TEXT"))
+user_base <- tibble(
+user = c("user1", "user2"),
+password = c("pass1", "pass2"),
+password_hash = sapply(c("pass1", "pass2"), sodium::password_store),
+permissions = c("admin", "standard"),
+name = c("Admin User", "Bank of Cyprus User 1")
+)
+#########
+runApp('C:/Users/aherraez/Downloads/GTModelMonitoring')
+install.packages("pROC")
+############
+install.packages("/Users/aherraez/Downloads/GTModelMonitoring/GTModelMonitoringLib_0.1.0.tar.gz", repos = NULL, type="source")
+shiny::runApp('C:/Users/aherraez/Downloads/GTModelMonitoring')
+install.packages("/Users/aherraez/Downloads/financial-tool/packages/GTquantrisk_0.1.0.tar.gz", repos=NULL, type="source")
+install.packages("/Users/aherraez/Downloads/financial-tool/packages/StatMeasures_1.0.tar.gz", repos=NULL, type="source")
+#############################
+library(janitor)
+library(dlookr)
+library(readxl)
+library(shiny)
+library(DT)
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+library(shinydashboard)
+library(shinyjs)
+library(RColorBrewer)
+library(dlookr)
+library(corrplot)
+library(lessR)
+library(plotly)
+library(skimr)
+library(naniar)
+library(visdat)
+library(purrr)
+library(rvest)
+library(StatMeasures)
+library(na.tools)
+library(lubridate)
+library(shinymanager)
+library(shinyauthr)
+library(sodium)
+library(ggjoy)
+library(readr)
+library(tidyr)
+library(GTquantrisk)
+mapping <- GTquantrisk::mapping
+industry <- GTquantrisk::industry
+t_definitions <- GTquantrisk::t_definitions
+# Read the first sheet of the xlsx file
+initial_data <- read_excel("/Users/aherraez/Downloads/consolidated_data_final.xlsx", sheet = 1, skip = 1)
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+#initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("symbol","Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("symbol","Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+library(dplyr)
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+dates <- initial_data$Dates
+# Identify the columns to convert (all except for Dates and symbol)
+cols_to_convert <- setdiff(names(initial_data), c("Dates", "symbol"))
+# Use mutate_at to convert the selected columns to numeric
+initial_data <- initial_data %>%
+mutate_at(vars(cols_to_convert), as.numeric)
+step_1 <- f_standard_clean_final(initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+head(step_3)
+#summary(step_3)
+#see how data changes from step 3 (good) to step 4 (NA)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3,"no")
+step_6 <- f_reshape(step_5)
+step_5a <- left_join(step_5,industry,by=c("symbol"))
+step_6a <- melt(step_5a, id.vars = c("symbol","date","sector")) %>%
+filter(variable != "industry")
+step_6a$variable <- as.character(step_6a$variable)
+step_6a <- step_6a %>%
+left_join(step_6[,c(1,2,3,5)], by = c("symbol" = "symbol", "date" = "date", "variable" = "variable"))
+step_6a$date <- as.Date(step_6a$date, "%Y-%m-%d")
+step_6a$value <- as.numeric(step_6a$value)
+str(step_6)
+ui <- f_ui_build(step_5a)
+server <- f_server_build(def_table = t_definitions, final_table = step_6a, joined_table = step_5a)
+shinyApp(ui=ui,server=server)
+runApp('C:/Users/aherraez/Downloads/financial-tool/runTEST.R')
+runApp('C:/Users/aherraez/Downloads/financial-tool/runTEST.R')
+# Read the first sheet of the xlsx file
+initial_data <- read_excel("/Users/aherraez/Downloads/consolidated_data_final.xlsx", sheet = 1, skip = 1)
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("symbol","Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED","symbol"),
+remove = TRUE)
+# Use mutate_at to convert the selected columns to numeric
+initial_data <- initial_data %>%
+mutate_at(vars(cols_to_convert), as.numeric)
+step_1 <- f_standard_clean_final(initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+head(step_3)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+step_5 <- f_ratio(step_4, step_3,"no")
+# Read the first sheet of the xlsx file
+initial_data <- read_excel("/Users/aherraez/Downloads/consolidated_data_final.xlsx", sheet = 1, skip = 1)
+#initial_data <- read_csv("/Users/aherraez/Downloads/financial-tool/docs/year_test.csv")
+initial_data <- separate(initial_data, col = 1, sep = ";",
+into = c("symbol","Dates", "Year", "SALES_REV_TURN", "IS_COGS_TO_FE_AND_PP_AND_G",
+"GROSS_PROFIT", "IS_OPER_INC", "EBITDA", "IS_INC_TAX_EXP",
+"EBIT", "IS_INT_EXPENSE", "IS_INT_INC", "IS_NET_INTEREST_EXPENSE",
+"IS_DEPR_EXP","IS_INVEST_INCOME", "BS_TOT_ASSET", "TOTAL_EQUITY", "BS_TOT_LIAB2",
+"BS_ST_DEBT", "BS_LT_BORROW", "C&CE_AND_STI_DETAILED", "BS_SH_OUT",
+"BS_CUR_ASSET_REPORT", "BS_CUR_LIAB", "BS_ACCT_NOTE_RCV", "ACCT_PAYABLE_ACCRUALS_DETAILED",
+"BS_ACCT_PAYABLE","BS_ACCTS_REC_EXCL_NOTES_REC", "BS_INVENTORIES", "CF_CASH_FROM_OPER",
+"CF_CASH_FROM_INV_ACT", "CF_CASH_FROM_FNC_ACT", "ARD_NET_INC", "SHORT_TERM_DEBT_DETAILED",
+"LONG_TERM_BORROWINGS_DETAILED"),
+remove = TRUE)
+library(dplyr)
+#str(initial_data)
+initial_data$Dates <- as.Date(format.Date(as.Date(initial_data$Dates,format = "%d/%m/%Y"), "%Y-12-31"))
+#for original initial_data input sheet
+initial_data <- initial_data[,c(2:ncol(initial_data))]
+dates <- initial_data$Dates
+# Identify the columns to convert (all except for Dates and symbol)
+cols_to_convert <- setdiff(names(initial_data), c("Dates", "symbol"))
+# Use mutate_at to convert the selected columns to numeric
+initial_data <- initial_data %>%
+mutate_at(vars(cols_to_convert), as.numeric)
+step_1 <- f_standard_clean_final(initial_data)
+step_2 <- f_remove_wrong(step_1)
+step_3 <- f_binded_data(step_2)
+head(step_3)
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+runApp('C:/Users/aherraez/Downloads/GTModelMonitoring')
+runApp('C:/Users/aherraez/Downloads/GTModelMonitoring')

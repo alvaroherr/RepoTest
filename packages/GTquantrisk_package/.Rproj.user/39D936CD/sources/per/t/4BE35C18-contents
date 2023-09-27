@@ -1,0 +1,38 @@
+install.packages("devtools")
+library(devtools)
+install("D:/USERS/cgreenwood/Documents/test")
+library(test)
+
+
+
+step_1 <- f_standard_clean_final(data = t_smyth)
+
+step_2 <- f_remove_wrong(step_1)
+
+step_3 <- f_binded_data(step_2)
+
+step_4 <- f_t_ratio_build(step_3, t_definitions)
+
+step_5 <- f_ratio(step_4, step_3)
+
+step_6 <- f_reshape(step_5)
+
+
+step_5a <- left_join(step_5,industry,by=c("symbol"))
+
+step_6a <- melt(step_5a, id.vars = c("symbol","date","sector")) %>%
+  filter(variable != "industry") %>%
+  left_join(step_6[,c(1,3,5)], by = c("symbol" = "symbol", "variable" = "variable"))
+
+step_6a$date <- as.Date(step_6a$date, "%Y-%m-%d")
+step_6a$value <- as.numeric(step_6a$value)
+
+
+ui <- f_ui_build(step_5a)
+
+server <- f_server_build(def_table = t_definitions, final_table = step_6a, joined_table = step_5a)
+
+shinyApp(ui=ui,server=server)
+
+
+

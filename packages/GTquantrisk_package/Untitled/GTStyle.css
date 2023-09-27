@@ -1,0 +1,149 @@
+body, td {
+   font-family: arial;
+   background-color: white;
+   font-size: 13px;
+}
+
+body {
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 20px;
+}
+
+tt, code, pre {
+   font-family: arial;
+   color: black;
+}
+
+h1 {
+   font-family: arial;
+   font-size:2.2em;
+   color: #4f2d7f;
+   font-weight: bold;
+}
+
+h2 {
+   font-family: arial;
+   font-size:1.8em;
+   color: black;
+   font-weight: bold;
+}
+
+h3 {
+   font-family: arial;
+   font-size:1.4em;
+   color: #4f2d7f;
+   font-weight: bold;
+}
+
+
+a:visited {
+   color: rgb(50%, 0%, 50%);
+}
+
+pre, img {
+  max-width: 100%;
+}
+pre {
+  overflow-x: auto;
+}
+pre code {
+   display: block; padding: 0.5em;
+}
+
+code {
+  font-size: 92%;
+  border: 1px solid #ccc;
+}
+
+code[class] {
+  background-color: #C8BEAF;
+}
+
+
+
+table {
+   max-width: 95%;
+   border: 1px solid #ccc;
+}
+
+th {
+  background-color: #00a7b5;
+  color: white;
+}
+
+td {
+  background-color: #f0f0f5;
+}
+
+.watermark {
+  opacity: 0.2;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  font-size: 500%;
+  color: #00407d;
+}
+
+.caption {
+  font-size: 0.9em;
+  font-style: italic;
+  color: grey;
+  margin-right: 10%;
+  margin-left: 10%;
+  text-align: justify;
+}
+
+blockquote {
+   color:#C8BEAF;
+   margin:0;
+   padding-left: 1em;
+   border-left: 0.5em #EEE solid;
+}
+
+hr {
+   border-bottom: none;
+   border-top-width: thin;
+   border-top-style: dotted;
+   border-top-color: #999999;
+}
+
+
+
+@media print {
+   body {
+      font-size:12pt;
+      max-width:100%;
+   }
+
+   a, a:visited {
+      text-decoration: underline;
+   }
+
+   hr {
+      visibility: hidden;
+      page-break-before: always;
+   }
+
+   pre, blockquote {
+      padding-right: 1em;
+      page-break-inside: avoid;
+   }
+
+   tr, img {
+      page-break-inside: avoid;
+   }
+
+   img {
+      max-width: 100%;
+   }
+
+   @page :left {
+      margin: 15mm 20mm 15mm 10mm;
+   }
+
+   @page :right {
+      margin: 15mm 10mm 15mm 20mm;
+   }
+}

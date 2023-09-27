@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1580203320653.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "749150626",
+    "id" : "4BE35C18",
+    "lastKnownWriteTime" : 1580204191,
+    "last_content_update" : 1580204191409,
+    "path" : "D:/USERS/cgreenwood/Desktop/template_package.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "7,28",
+        "scrollLine" : "0",
+        "source_window_id" : ""
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

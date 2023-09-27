@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1588080553996.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1849772359",
+    "id" : "95947AD4",
+    "lastKnownWriteTime" : 1588081429,
+    "last_content_update" : 1588081430309,
+    "path" : "//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/packages/GTquantrisk_package/R/hello.R",
+    "project_path" : "R/hello.R",
+    "properties" : {
+        "cursorPosition" : "2376,0",
+        "scrollLine" : "2363"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,7 @@
+{
+    "installOptions" : {
+        "installDependencies" : true,
+        "installFromRepository" : true,
+        "libraryPath" : "d:/USERS/dmcdonald/Documents/R/R-3.6.1/library"
+    }
+}

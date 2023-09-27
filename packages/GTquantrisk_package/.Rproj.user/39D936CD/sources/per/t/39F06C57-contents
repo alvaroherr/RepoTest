@@ -1,0 +1,2064 @@
+#' Gets the lag of data point in a dataframe.
+#'
+#' @param x - Each data point
+#' @return Used as part of the lagged_df function
+#' @examples
+#' Test <- last_year(x)
+#' @export
+#'
+
+####################
+##############################################################################################################################
+# function that takes raw data and the mapping document to produce
+# a dataframe with column names labelled as per the mapping document
+
+# change all column names to stansardised as per the mapping document
+f_standardise_colnames <- function(data, map = mapping){
+  for(i in 1:nrow(map)){
+    target <- as.character(map[i,1])
+    for (j in 2:ncol(map)){
+      bad_name <- as.character(map[i,j])
+      names(data)[as.character(names(data)) == bad_name] <- target
+    }
+  }
+
+
+  # if column names cannot be standardised (because the column name is not present in the data or the mappping is incorrectly named)
+  # we take the missing standardised variable name name and create an empty column for it
+  standard_name <- as.vector(unlist(c(map[,1])))
+  for (name in 1:length(standard_name)){
+    if(standard_name[name] %in% colnames(data)){
+
+    }else{
+      data_to_be_added <- data.frame(matrix(nrow = nrow(data), ncol = 1))
+      colnames(data_to_be_added) <- standard_name[name]
+      data <- cbind(data, data_to_be_added)
+    }
+  }
+  return(data)
+}
+
+#########################################################################################################################
+# function that takes the renamed column data from f_rename_colnames and the mapping document to produce
+# a dataframe of standard size (number of column names = number of mapping variables)
+
+f_standard_size <- function(data, map = mapping){
+  map_names <- as.vector(unlist(c(map[,1])))
+  not_in <- c()
+
+  # find column names in data that aren't in mapping document and add them to an empty vector
+  for(i in 1:length(colnames(data))){
+    if(colnames(data)[i] %in% map_names){
+
+    }else{
+      not_in <- c(not_in, colnames(data)[i])
+    }
+  }
+
+  # remove these column names from data
+  if(is.null(not_in)){
+    data <- data
+  }else{
+    data <- data %>%
+      select( - c(not_in))
+  }
+  return(data)
+}
+
+
+
+##########################################################################################################################
+# function that takes the standard size data from f_standard_size and the mapping document to produce
+# a dataframe of standard format (symbol, date, all other variable names)
+
+f_standard_format <- function(data, map = mapping){
+
+  # Convert to date format
+  data$date <- as.Date(format.Date(data$date, "%Y-12-31"))
+
+  # make date the second column
+  col_idx <- grep("date", names(data))
+  data <- data[, c(col_idx, (1:ncol(data))[-col_idx])]
+
+  # make symbol the first column
+  col_idx <- grep("symbol", names(data))
+  data <- data[, c(col_idx, (1:ncol(data))[-col_idx])]
+
+  return(data)
+}
+
+#######################################################################################
+
+#  t_financial_data_all unsorted etc
+
+f_standard_clean_final <- function(data, map = mapping){
+  data1 <- f_standardise_colnames(data, map)
+  data2 <- f_standard_size(data1, map)
+  data3 <- f_standard_format(data2, map)
+  return(data3)
+}
+
+# f_standard_clean_final(data = t_smyth)
+
+#######################################################################################
+
+
+## Function that removes crazy outliers per each pbservation grouping
+f_remove_wrong <- function(data) {
+  for(i in 1:(nrow(data)/length(unique(data$date)))){
+    for(j in 3:ncol(data)){
+      outlier_test <- data[c((1 + length(unique(data$date))*(i-1)):(length(unique(data$date)) * i)),j]
+      median_value <- median(as.numeric(unlist(outlier_test)),na.rm = TRUE)
+      if(is.na(median_value)){
+
+      }else{
+        for(k in 1:length(unique(data$date))){
+          if(is.na(outlier_test[k])){
+
+          }else if (outlier_test[k] > 50 * abs(median_value)){
+            data[(1 + length(unique(data$date))*(i-1)+(k-1)),j] <- NA
+          }else{
+            data[(1 + length(unique(data$date))*(i-1)+(k-1)),j] <- data[(1 + length(unique(data$date))*(i-1)+(k-1)),j]
+          }
+        }
+      }
+    }
+  }
+  return(data)
+}
+
+#  green_machine <- remove_wrong(d_mcd)
+
+
+##################################################################################
+
+f_last_year <- function(x){
+  lag(x)
+}
+
+
+f_lagged_df <- function(data){
+  data_f <- data
+  col_names_test <- colnames(data_f[,-c(1,2)])
+  test_change <- data_f %>%
+    group_by(symbol) %>%
+    arrange(date,.by_group = TRUE) %>%
+    mutate_each(funs(f_last_year), col_names_test)
+
+  colnames(test_change) <- paste(colnames(data_f),"last",sep="_")
+
+  return(test_change)
+
+}
+
+f_all_data_wide <- function(data){
+  data_f <- data
+  data_fa <- data_f %>%
+    group_by(symbol) %>%
+    arrange(date,.by_group = TRUE)
+
+  return(data_fa)
+}
+
+
+f_binded_data <- function(data){
+  cbind(f_all_data_wide(data),f_lagged_df(data))
+}
+
+#  bloomberg <- binded_data(green_machine)
+
+###########################################################################################################################
+
+## Function to extract the list of all the borrowers i.e the observations in the data for the blank data frame with built ratios
+f_borrowers <- function(data) {
+  v_borrowers <- c(sort(as.character(data$symbol)))
+  return(v_borrowers)
+}
+
+
+
+## Function to extract the column names for the blank dataframe with built ratios
+f_columns <- function(definitions = t_definitions) {
+  v_cols <- c("symbol", "date", sort(definitions$Name))
+  return(v_cols)
+}
+
+
+
+## Function to build empty data frame
+f_t_ratio_build <- function(data1, data2 = t_definitions) {
+  rows <- f_borrowers(data1)
+  columns <- f_columns(data2)
+
+  t_ratio <- data.frame(matrix(ncol = length(columns), nrow = length(rows)))
+  colnames(t_ratio) <- columns
+
+  t_ratio <- clean_names(t_ratio)
+  t_ratio$symbol <- sort(rows)
+  t_ratio$date <- data1$date
+
+  return(t_ratio)
+}
+
+
+# tommu <- t_ratio_build(bloomberg, t_definitions)
+
+# final_before_reshaped <-  f_ratio(tommu, bloomberg)
+
+
+f_ratio <- function(df1, df2) {
+
+  #Sales
+  df1$sales <- df2$revenue
+
+  #Asset Turnover
+  df1$asset_turnover <- (df2$revenue / df2$total_assets)
+
+  #Interest Cover Ratio
+  df1$interest_cover_ebit_ratio <- (df2$ebit / df2$interest_expense)
+
+  #Cash Flow Cover Ratio
+  df1$cash_flow_cover_ratio <- (df2$ebitda / df2$total_current_liabilities)
+
+  #Interest Cover (EBITDA) Ratio
+  df1$interest_cover_ebitda_ratio <- (df2$ebitda / df2$interest_expense)
+
+  #Operating Cash Flow
+  df1$operating_cash_flow_ratio <- (df2$operating_cash_flow / df2$total_current_liabilities)
+
+  #Debt Ratio
+  df1$debt_ratio <- (ifelse(!is.na(df2$short_term_debt & df2$long_term_debt),
+                             df2$short_term_debt + df2$long_term_debt,
+                             ifelse(is.na(df2$short_term_debt) & !is.na(df2$long_term_debt),
+                                    df2$long_term_debt,
+                                    ifelse(!is.na(df2$short_term_debt) & is.na(df2$long_term_debt),
+                                           df2$short_term_debt, NA)))) / (df2$total_assets)
+
+  #Total Debt to Equity
+  df1$total_debt_to_equity_ratio <- (ifelse(!is.na(df2$short_term_debt & df2$long_term_debt),
+                                             df2$short_term_debt + df2$long_term_debt,
+                                             ifelse(is.na(df2$short_term_debt) & !is.na(df2$long_term_debt),
+                                                    df2$long_term_debt,
+                                                    ifelse(!is.na(df2$short_term_debt) & is.na(df2$long_term_debt),
+                                                           df2$short_term_debt, NA)))) / (df2$total_shareholders_equity)
+  #negative ratios and group (special character for if they are missing)
+
+
+  #Long-term debt to equity
+  df1$long_term_debt_to_equity_ratio <- (df2$long_term_debt / df2$total_shareholders_equity)
+
+  #Cash ratio
+  df1$cash_ratio <- (df2$cash_and_cash_equivalents / df2$total_current_liabilities)
+
+  #Current Ratio
+  df1$current_ratio <- (df2$total_current_assets / df2$total_current_liabilities)
+
+  #Net working Capital
+  df1$net_working_capital <- (df2$total_current_assets - df2$total_current_liabilities)
+
+  #Quick Ratio
+  df1$quick_ratio <- ((df2$total_current_assets - df2$inventories) / df2$total_current_liabilities)
+
+  #Operating Margin
+  df1$operating_margin <- (df2$ebit / df2$revenue)
+
+  #ROE
+  df1$return_on_equity_roe <- (df2$net_income / df2$total_shareholders_equity)
+
+  #Net profit margin
+  df1$net_profit_margin <- (df2$net_income / df2$revenue)
+
+  #ROA
+  df1$return_on_assets_roa <- (df2$net_income / df2$total_assets)
+
+  #Gross Profit Margin
+  df1$gross_profit_margin <- ((df2$revenue - df2$cost_of_revenue)/ df2$revenue)
+
+  #Inventory Turnover
+  df1$inventory_turnover <- (df2$revenue / df2$inventories)
+
+  #Net Margin Trend
+  df1$net_margin_trend <- ((df2$net_income / df2$revenue) - (df2$net_income_last / df2$revenue_last)) / (df2$net_income_last / df2$revenue_last)
+
+  #Days Inventory
+  df1$days_inventory <- (df2$receivables * 365)/(df2$cost_of_revenue)
+
+  #Days Payable
+  df1$days_payables <- (df2$payables * 365)/(df2$cost_of_revenue)
+
+  #DuPont ROA
+  df1$du_pont_roa <- (df2$ebit - df2$income_tax_expense)/df2$total_assets
+
+  #DuPont ROE
+  df1$du_pont_roe <- ((df2$ebit -(df2$income_tax_expense + df2$interest_expense))/df2$total_shareholders_equity)
+
+  #EBIT Trend
+  df1$ebit_trend <- ((df2$ebit - df2$ebit_last)/abs(df2$ebit_last))
+
+  #EBITDA Trend
+  df1$ebitda_trend <- ((df2$ebitda - df2$ebitda_last)/abs(df2$ebitda_last))
+
+  #Gross Margin Trend
+  df1$gross_margin_trend <- (((df2$ebitda/df2$revenue)-(df2$ebitda_last/df2$revenue_last))/(abs(df2$ebitda_last/df2$revenue_last)))
+
+  #Interest Coverage
+  df1$interest_coverage <- (df2$operating_cash_flow/df2$interest_expense)
+
+  #Pretax Profit Margin
+  df1$pretax_profit_margin <- ((df2$ebit + df2$income_tax_expense)/df2$revenue)
+
+  #Total Liabilities to Equity Ratio
+  df1$total_liabilities_to_equity_ratio <- df2$total_liabilities / df2$total_shareholders_equity
+
+  #Return on Average Assets
+  df1$return_on_average_assets_roaa <- ((df2$net_income)/((df2$total_assets + df2$total_assets_last)/2))
+
+  #Return on Average Equity
+  df1$return_on_average_equity_roae <- ((df2$net_income)/((df2$total_shareholders_equity + df2$total_shareholders_equity_last)/2))
+
+  #Sales Growth Rate
+  df1$sales_growth_rate <- ((df2$revenue - df2$revenue_last)/df2$revenue_last)
+
+  #Short Term Financing
+  df1$short_term_financing <- (df2$total_current_liabilities/df2$total_assets)
+
+  #Average Assets
+  df1$average_assets <- ((df2$total_assets_last + df2$total_assets) / 2)
+
+  #Average Equity
+  df1$average_equity <- ((df2$total_shareholders_equity_last + df2$total_shareholders_equity) / 2)
+
+  #Operating Cash Flow
+  df1$operating_cash_flow <- df2$operating_cash_flow
+
+  #Cash Flow
+  df1$cash_flow <- (df2$operating_cash_flow + df2$investing_cash_flow + df2$financing_cash_flow)
+
+  #Debt to Capital
+  df1$debt_to_capital <- (ifelse(!is.na(df2$short_term_debt & df2$long_term_debt),
+                                  df2$short_term_debt + df2$long_term_debt,
+                                  ifelse(is.na(df2$short_term_debt) & !is.na(df2$long_term_debt),
+                                         df2$long_term_debt,
+                                         ifelse(!is.na(df2$short_term_debt) & is.na(df2$long_term_debt),
+                                                df2$short_term_debt, NA)))) / (df2$total_shareholders_equity + df2$long_term_debt)
+
+  #Liabilities to Assets Ratio
+  df1$liabilities_to_assets_ratio <- df2$total_liabilities / df2$total_assets
+
+  #Cash to Current Assets
+  df1$cash_to_current_assets <- df2$cash_and_cash_equivalents / df2$total_current_assets
+
+  #Collection Days
+  df1$collection_days <- (df2$receivables * 365) / df2$revenue
+
+  #Operating Cash Flow Margin
+  df1$operating_cash_flow_margin <- df2$operating_cash_flow /df2$revenue
+
+  return(df1)
+
+}
+
+
+## Function to melt ratio dataframe
+f_reshape <- function(data1, data2 = t_definitions) {
+  subset <- subset(data1, select = -c(symbol, date))
+  names <- colnames(subset)
+
+  for(i in 1:length(names)){
+    data2[i,2] <- names[i]
+  }
+
+
+  reshaped_df1 <- melt(data1, id.vars = c("symbol", "date"))
+  reshaped_df1_final <- left_join(reshaped_df1, data2[, c(1,2)], by = c("variable" = "Name"))
+  return(reshaped_df1_final)
+}
+
+
+#-----------------------------------------------------------------------------------------#
+
+#                       Function to build relevant statistics                             #
+#    This functions takes the data that have been built from the ratios and returns some  #
+#    interesting summary statistics about the ratios. This is done between a certain date #
+#    range, where year1 is the start year, and year2 is the end year                      #
+
+f_statistical_overview <- function(year1,year2,data){
+
+  t_filtered_ratio <- data %>%
+    filter(date %in% as.Date(paste(year1,"12-31",sep="-")):as.Date(paste(year2,"12-31",sep="-")))
+
+  v_missing <- as.data.frame(diagnose(t_filtered_ratio[3:length(t_filtered_ratio)])[,c(1,3,4)])
+  v_outlier <- as.data.frame(diagnose_outlier(t_filtered_ratio[3:length(t_filtered_ratio)])[,1:3])
+  v_summary <- as.data.frame(diagnose_numeric(t_filtered_ratio[3:length(t_filtered_ratio)])[,c(1:7)])
+
+  t_statistics <- v_summary %>%
+    cbind(v_missing[,2:3], v_outlier[2:3])
+
+  t_statistics[,"missing_percent"] <- round(t_statistics[,"missing_percent"] /100,digits = 2)
+
+  t_statistics[,c(2:7,11)] <- round(t_statistics[,c(2:7,11)],digits = 2)
+
+  format(t_statistics, big.mark = ",",scientific = FALSE)
+}
+
+#-------Function for extracting outliers-------#
+
+f_outliers <- function(dataframe) {
+  dataframe %>%
+    select_if(is.numeric) %>%
+    map(~ boxplot.stats(.x)$out)
+}
+
+###### PSI FUNCTION ######
+
+f_base_psi <- function(data,type,variable_select,start_year,group_class,use){
+
+  perc_loaded <- data
+  v_dates <- as.Date(sort(unique(data$date)),"%Y-%m-%d")
+
+  if (group_class == "Full") {
+    perc_loaded  <- perc_loaded
+  }
+  else {
+    perc_loaded  <- perc_loaded  %>%
+      filter(sector %in% group_class)
+  }
+  perc_loaded <- perc_loaded %>%
+    filter(Type %in% type)
+  perc_loaded <- perc_loaded %>%
+    filter(variable %in% variable_select)
+  perc_loaded <- perc_loaded%>%
+    filter(date %in% v_dates[start_year-(year(v_dates[1])-1)])
+
+  perc_loaded_sorted <- sort(perc_loaded$value)
+  perc_loaded_decile <- decile(perc_loaded_sorted)
+  perc_loaded_decile_df <- data.frame(table(perc_loaded_decile))
+
+  decile_year_value <- data.frame(matrix(nrow=1,ncol=9))
+  for(i in 1:9){
+    decile_year_value[1,i] <- perc_loaded_sorted[sum(perc_loaded_decile_df[c(1:i),2])] # Finds deciles of year 1
+  }
+  colnames(decile_year_value) <- c("perc_.1","perc_.2","perc_.3","perc_.4","perc_.5","perc_.6","perc_.7","perc_.8","perc_.9")
+  decile_year_value <- decile_year_value
+
+  t_full_perc <- data
+  if (group_class == "Full") {
+    t_full_perc <- t_full_perc
+  }
+  else {
+    t_full_perc <- t_full_perc %>%
+      filter(sector %in% group_class)
+  }
+  t_full_perc <- t_full_perc %>%
+    filter(date %in% c(v_dates[(start_year-(year(v_dates[1])-2)):length(v_dates)]))
+  t_full_perc <- t_full_perc %>% filter(Type %in% type)
+  t_full_perc <- t_full_perc %>% filter(variable %in% variable_select)
+  t_full_perc <- t_full_perc %>%
+    mutate(perc_exp_.1 = ifelse(value <= decile_year_value[,"perc_.1"],1,0),
+           perc_exp_.2 = ifelse(value <= decile_year_value[,"perc_.2"],1,0),
+           perc_exp_.3 = ifelse(value <= decile_year_value[,"perc_.3"],1,0),
+           perc_exp_.4 = ifelse(value <= decile_year_value[,"perc_.4"],1,0),
+           perc_exp_.5 = ifelse(value <= decile_year_value[,"perc_.5"],1,0),
+           perc_exp_.6 = ifelse(value <= decile_year_value[,"perc_.6"],1,0),
+           perc_exp_.7 = ifelse(value <= decile_year_value[,"perc_.7"],1,0),
+           perc_exp_.8 = ifelse(value <= decile_year_value[,"perc_.8"],1,0),
+           perc_exp_.9 = ifelse(value <= decile_year_value[,"perc_.9"],1,0))
+  t_full_perc <- t_full_perc %>% na.omit()
+
+  percentages <- t_full_perc %>%
+    group_by(date)%>%
+    summarise_at(vars(perc_exp_.1:perc_exp_.9),mean,na.rm=TRUE)
+
+  deciles <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+  deciles[,1] <- percentages[,1]
+
+  for(i in 1:9){
+    deciles[,i+1] <- i/10 - percentages[,i+1]
+  }
+
+  colnames(deciles) <- colnames(percentages)
+
+
+  log_table <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+
+  log_table <- percentages[,1]
+
+  for(i in 1:9){
+    log_table[,i+1] <- log((i/10)/percentages[,i+1],base = exp(1))
+  }
+
+  colnames(log_table) <- colnames(percentages)
+
+  psi_single <- log_table[,c(2:10)] * deciles[,c(2:10)]
+
+  psi_final <- data.frame(rowSums(psi_single))
+
+  psi_dates <- v_dates[(start_year-year(v_dates[1])+2):length(v_dates)]
+
+  psi_final <- cbind(psi_dates,psi_final)
+
+  psi_final[,2] <- round(psi_final[,2],2)
+
+  colnames(psi_final) <- c("date","PSI")
+
+  psi_transpose <- psi_final
+
+  if(use == "values"){
+    return(psi_transpose)
+  }else{
+    return(percentages)
+  }
+}
+
+#ROLLING CASE#
+
+#This finds the deciles for the required years that we will use
+
+f_rolling_psi <- function(data,type, variable_select, start_year,group_class,use){
+
+  perc_loaded <- data
+  v_dates <- as.Date(sort(unique(data$date)),"%Y-%m-%d")
+
+  all_deciles <- data.frame()
+  rolling_data <- data.frame()
+  deciles_rolling <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+
+  for(i in (start_year-(year(v_dates[1])-1)):length(v_dates)){
+    variable_data <- data
+    if (group_class == "Full") {
+      variable_data <- variable_data
+    }
+    else {
+      variable_data <- variable_data %>%
+        filter(sector %in% group_class)
+    }
+    variable_data <-variable_data %>%
+      filter(Type %in% type) %>%
+      filter(variable %in% variable_select) %>%
+      filter(date %in% v_dates[i])
+
+    sorted_variable <- sort(variable_data$value)
+    decile_variable <- decile(sorted_variable)
+    decile_df <- data.frame(table(decile_variable))
+
+    decile_year_value <- data.frame(matrix(nrow=1,ncol=9))
+
+    for(j in 1:9){
+      decile_year_value[1,j] <- sorted_variable[sum(decile_df[c(1:j),2])] # Finds deciles of all years
+    }
+    colnames(decile_year_value) <- c("perc_.1","perc_.2","perc_.3","perc_.4","perc_.5","perc_.6","perc_.7","perc_.8","perc_.9")
+    assign(paste("decile",i,sep="_"),  decile_year_value)
+  }
+
+
+  for(i in (start_year-(year(v_dates[1])-1)):length(v_dates)){
+    assign(paste("all_deciles",sep=""), rbind(all_deciles, get(paste("decile",i,sep="_"))))
+  }
+
+  all_deciles <- all_deciles
+
+  #We will then look at how we can find the number of how many fit into the previous year
+
+  for(i in (start_year-(year(v_dates[1])-1)):(length(v_dates)-1)){
+    t_full_perc <- data
+    if (group_class == "Full") {
+      t_full_perc <- t_full_perc
+    }
+    else {
+      t_full_perc <- t_full_perc %>%
+        filter(sector %in% group_class)
+    }
+    t_full_perc <- t_full_perc %>%
+      filter(date %in% c(v_dates[(i+1):(i+1)]))
+    t_full_perc <- t_full_perc %>% filter(Type %in% type)
+    t_full_perc <- t_full_perc %>% filter(variable %in% variable_select)
+    t_full_perc <- t_full_perc %>%
+      mutate(perc_exp_.1 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.1"],1,0),
+             perc_exp_.2 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.2"],1,0),
+             perc_exp_.3 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.3"],1,0),
+             perc_exp_.4 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.4"],1,0),
+             perc_exp_.5 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.5"],1,0),
+             perc_exp_.6 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.6"],1,0),
+             perc_exp_.7 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.7"],1,0),
+             perc_exp_.8 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.8"],1,0),
+             perc_exp_.9 = ifelse(value <= all_deciles[(i-(start_year - year(v_dates[1]))),"perc_.9"],1,0))
+    t_full_perc <- t_full_perc %>% na.omit()
+    assign(paste("rolling",i+1,sep="_"),t_full_perc)
+  }
+
+  for(i in (start_year-(year(v_dates[1])-1)):(length(v_dates)-1)){
+    rolling_data <- rbind(rolling_data,get(paste("rolling",i+1,sep="_")))
+  }
+
+  percentages_rolling <- rolling_data %>%
+    group_by(date)%>%
+    summarise_at(vars(perc_exp_.1:perc_exp_.9),mean,na.rm=TRUE)
+
+  percentages <- percentages_rolling
+
+  #################GOOD#########################
+
+
+
+  deciles_rolling[,1] <- percentages_rolling[,1]
+
+  for(i in 1:9){
+    deciles_rolling[,i+1] <- i/10 - percentages_rolling[,i+1]
+  }
+
+  colnames(deciles_rolling) <- colnames(percentages_rolling)
+
+
+  log_table_rolling <- data.frame(matrix(nrow = (length(v_dates) - (start_year + 1 - year(v_dates[1]))),ncol=10))
+
+  log_table_rolling <- percentages_rolling[,1]
+
+  for(i in 1:9){
+    log_table_rolling[,i+1] <- log((i/10)/percentages_rolling[,i+1],base = exp(1))
+  }
+
+  colnames(log_table_rolling) <- colnames(percentages_rolling)
+
+  psi_single_rolling <- log_table_rolling[,c(2:10)] * deciles_rolling[,c(2:10)]
+
+  psi_final_rolling <- data.frame(rowSums(psi_single_rolling))
+
+  psi_dates <- v_dates[(start_year-year(v_dates[1])+2):length(v_dates)]
+
+  psi_final_rolling <- cbind(psi_dates,psi_final_rolling)
+
+  psi_final_rolling[,2] <- round(psi_final_rolling[,2],2)
+
+  colnames(psi_final_rolling) <- c("date","PSI")
+
+  psi_transpose <- psi_final_rolling
+
+  if(use == "values"){
+    return(psi_transpose)
+  }else{
+    return(percentages)
+  }
+
+}
+
+#---------------Shiny User Interface---------------------------------------#
+f_ui_build <- function(data1, data2 = t_definitions) {
+  sector_list <- sort(unique(data1$sector))
+  data1$date <- as.Date(data1$date, "%Y-%m-%d")
+  data1 <- data1
+  ui <- dashboardPage(
+    #Title for the App
+    dashboardHeader(title = "Financial Risk Driver Tool"),
+    dashboardSidebar(
+      conditionalPanel(
+        'input.tabs === "Data Cleaning"',
+        sliderInput("dq_missing_req",
+                    "Choose max missing:",
+                    min = as.numeric(0),
+                    max = as.numeric(1),
+                    value = as.numeric(0.3),
+                    step = as.numeric(0.05),sep = ""),
+        actionButton("dq_button",
+                     "Filter Dataframe")
+      ),
+      conditionalPanel(
+        'input.tabs === "Overview"',
+        sliderInput("overview_years",
+                    "Choose a year range:",
+                    min = as.numeric(substring(min(data1$date), 1,4)),
+                    max = as.numeric(substring(max(data1$date), 1,4)),
+                    value = c(as.numeric(substring(min(data1$date), 1,4)),as.numeric(substring(max(data1$date), 1,4))),
+                    step = 1,sep=""),
+        downloadButton("overview_report", "Generate Report"),
+        tags$style(type="text/css","#overview_report{background-color:purple;color: black;font-family: Courier New}")
+
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Analysis"',
+        selectInput("type",
+                    "1a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("variable",
+                    "1b) Choose the metric:",
+                    choices = NULL),
+        selectInput("analysis_sector",
+                    "2a) Choose Sector:",
+                    choices = c("All", sector_list))
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Statistics per sector"',
+        selectInput("statistics_sector",
+                    "1a) Choose sector:",
+                    choices = c("All", sector_list)),
+        selectInput("statistics_type",
+                    "2a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("statistics_variable",
+                    "2b) Choose the metric:",
+                    choices = NULL)
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Outlier Analysis"',
+        selectInput("type_outlier",
+                    "1a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("variable_outlier",
+                    "1b) Choose the metric:",
+                    choices = NULL),
+        selectInput("outlier_sector",
+                    "1c) Choose the sector:",
+                    choices = c("All", sector_list)),
+        sliderInput("year_outlier",
+                    "2a) Choose a year range:",
+                    min = as.numeric(substring(min(data1$date), 1,4)),
+                    max = as.numeric(substring(max(data1$date), 1,4)),
+                    value = c(as.numeric(substring(min(data1$date), 1,4)),as.numeric(substring(max(data1$date), 1,4))),
+                    step = 1,sep=""),
+        downloadButton("outlier_report", "Generate Report"),
+        tags$style(type="text/css","#outlier_report{background-color:purple;color: black;font-family: Courier New}")
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Correlation Matrix"',
+        selectInput("visualisation_sector",
+                    "1a) Choose sector:",
+                    choices = c("All", sector_list)),
+        selectInput("Visualisation_type",
+                    "1b) Type of Ratio:",
+                    choices = c("All", sort(unique(data2$Type))))
+      ),
+
+
+
+      conditionalPanel(
+        'input.tabs === "Company Analysis"',
+        selectInput("company_sector",
+                    "1a) Choose Group:",
+                    choices = c("All",sector_list)),
+        selectInput("company_symbol",
+                    "1b) Choose a company:",
+                    choices = NULL),
+        selectInput("company_type",
+                    "2a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("company_variable",
+                    "2b) Choose the metric:",
+                    choices = NULL)
+
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Population Stability Index"',
+        selectInput("psi_sector",
+                    "1a) Choose the population:",
+                    choices = c("Full", sector_list)),
+        selectInput("psi_type",
+                    "2a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("psi_variable",
+                    "2b) Choose the metric:",
+                    choices = NULL),
+        selectInput("psi_calculation",
+                    "3a) Choose the type of calculation:",
+                    choices = c("Base", "Rolling")),
+        numericInput("psi_start","Choose Start Point:",
+                     value = 2005,
+                     min=2004,
+                     max=2019,
+                     step = 1)
+      ),
+
+
+
+      conditionalPanel(
+        'input.tabs === "Macroeconomic Indicators"',
+        selectInput("macro_area",
+                    "1a) Location:",
+                    choices = c("ECB", "US")),
+        selectInput("macro_type",
+                    "1b) Indicator:",
+                    choices = c("interest_rate", "inflation"))
+
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Data Quality Report"',
+        selectInput("dq_type",
+                    "1a) Type of Ratio:",
+                    choices = c("All Ratios", sort(unique(data2$Type)))),
+        selectInput("dq_sector",
+                    "1b) Choose Group:",
+                    choices = c("All", sector_list))
+      ),
+
+      conditionalPanel(
+        'input.tabs === "Default Vis"',
+        selectInput("default_type",
+                    "1a) Type of Ratio:",
+                    choices = sort(unique(data2$Type))),
+        selectInput("default_variable",
+                    "1b) Choose the metric:",
+                    choices = NULL),
+        selectInput("default_sector",
+                    "1c) Choose sector:",
+                    choices = c("All", sector_list))
+      )
+    ),
+
+
+
+
+
+    dashboardBody(
+      useShinyjs(),
+      tabsetPanel(type = "tabs",
+                  id = "tabs",
+                  tabPanel("Data Cleaning",
+                           DT::dataTableOutput("company_missing_table"),
+                           br(),
+                  ),
+                  tabPanel("Overview",
+                           fluidRow(column(12, align = "center",
+                                           textOutput("table_statshead"))),
+                           tags$h1(tags$style("#table_statshead{color : purple; font-size : 20px}")),
+                           br(),
+                           DT::dataTableOutput("table_stats"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("missing_head"))),
+                           tags$h1(tags$style("#missing_head{color: purple; font-size : 20px}")),
+                           br(),
+                           plotlyOutput("missing_plot")
+                  ),
+
+                  tabPanel("Analysis",
+                           fluidRow(column(12, align = "center",
+                                           textOutput("header"))),
+
+                           hidden(
+                             div(id = 'text_div',
+                                 verbatimTextOutput("text")
+                             )
+                           ),
+                           tags$b(tags$style("#text{color : purple; font-size: 30px;}")),
+
+                           tags$br(),
+
+                           fluidRow(column(12,
+                                           "", fixedRow(column(3,
+                                                               textOutput("Definition")),
+                                                        column(9,
+                                                               textOutput("definition"))
+                                           ))),
+
+                           tags$h1(tags$style("#header{color : purple; font-size: 20px;}")),
+                           tags$h3(tags$style("#Definition{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#definition{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+                           br(),
+                           br(),
+
+                           fluidRow(column(12,
+                                           "", fluidRow(column(3,
+                                                               textOutput("ExpectedRiskDirection")),
+                                                        column(9,
+                                                               textOutput("riskdirection"))
+                                           ))),
+
+                           tags$h3(tags$style("#ExpectedRiskDirection{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#riskdirection{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+                           br(),
+                           br(),
+
+                           fluidRow(column(12,
+                                           "",fluidRow(column(3,
+                                                              textOutput("Formula")),
+                                                       column(9,
+                                                              textOutput("formula"))
+                                           ))),
+
+                           tags$h3(tags$style("#Formula{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#formula{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+
+
+                           br(),
+                           br(),
+
+                           dataTableOutput("componenttable"),
+
+
+                           br(),
+                           br(),
+
+                           dataTableOutput("subderivationtable"),
+                           br(),
+                           br(),
+
+
+                           fluidRow(column(12,
+                                           "",fluidRow(column(3,
+                                                              textOutput("FormulaFullFormat")),
+                                                       column(9,
+                                                              textOutput("fullformula"))
+                                           ))),
+
+                           tags$h3(tags$style("#FormulaFullFormat{color : purple; font-size: 15px}")),
+                           tags$head(tags$style("#fullformula{color: black;
+                                              font-size: 15px;
+                                              }")),
+
+
+
+                           br(),
+                           br(),
+
+
+                           #Make the plot space
+                           plotlyOutput("financeplot")
+                  ),
+                  # textOutput("text3")
+                  # ),
+
+                  tabPanel("Statistics per sector",
+                           fluidRow(column(12, align = "center", textOutput("tablehead"))),
+                           tags$h1(tags$style("#tablehead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           dataTableOutput("stats"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("stats_comphead"))),
+                           tags$h1(tags$style("#stats_comphead{color : purple; font-size : 15px}", align = "center")),
+                           br(),
+                           dataTableOutput("stats_comp")
+                  ),
+
+                  tabPanel("Outlier Analysis",
+                           fluidRow(column(12, align = "center", textOutput("outlierhead"))),
+                           tags$h1(tags$style("#outlierhead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           plotOutput("outlier_plot"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("outlier_tablehead"))),
+                           tags$h1(tags$style("#outlier_tablehead{color: purple; font-size : 20px}", align = "center")),
+                           br(),
+                           dataTableOutput("outlier_table")
+                  ),
+
+                  tabPanel("Correlation Matrix",
+                           fluidRow(column(12, align = "center", textOutput("corrhead"))),
+                           tags$h1(tags$style("#corrhead{color : purple; font-size : 20px}", align = "center")),
+                           plotlyOutput("corr"),
+                           fluidRow(column(12, align = "left", textOutput("corr_error"))),
+                           tags$h1(tags$style("#corr_error{color : black; font-size : 15px}", align = "left"))
+                  ),
+
+                  tabPanel("Company Analysis",
+                           fluidRow(column(12, align = "center", textOutput("companyhead"))),
+                           tags$h1(tags$style("#companyhead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("company_info"))),
+                           tags$head(tags$style("#company_info{color: black;
+                                 font-size: 20px;
+                                 font-style: italic;
+                                 border: 4px double purple;
+                                 }"
+                           )
+                           ),
+                           br(),
+                           dataTableOutput("company_table"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("company_plothead"))),
+                           tags$h1(tags$style("#company_plothead{color : purple; font-size : 20px}", align = "center")),
+                           plotlyOutput("company_plot"),
+                           textOutput("company_error")
+                  ),
+
+
+                  tabPanel("Population Stability Index",
+                           fluidRow(column(12, align = "center", textOutput("percentile_tablehead"))),
+                           tags$h1(tags$style("#percentile_tablehead{color : purple; font-size : 20px", align = "center")),
+                           br(),
+                           dataTableOutput("percentile_table"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("psi_tablehead"))),
+                           tags$h1(tags$style("#psi_tablehead{color: purple; font-size : 20px}", align = "center")),
+                           br(),
+                           dataTableOutput("psi_table"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("factor_plothead"))),
+                           tags$h1(tags$style("#factor_plothead{color: purple; font-size : 20px", align = "center")),
+                           br(),
+                           plotlyOutput("factor_plot"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("stability_plothead"))),
+                           tags$h1(tags$style("#stability_plothead{color: purple; font-size : 20px}", align = "center")),
+                           br(),
+                           plotlyOutput("stability_plot")
+
+                  )
+                  ,
+
+                  tabPanel("Macroeconomic Indicators",
+                           fluidRow(column(12, align = "center", textOutput("macro_tablehead"))),
+                           tags$h1(tags$style("#macro_tablehead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           dataTableOutput("macro_table"),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("macro_plothead"))),
+                           tags$h1(tags$style("#macro_plothead{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           plotlyOutput("macro_plot")
+                  ),
+
+                  tabPanel("Data Quality Report",
+                           fluidRow(column(12, align = "center", textOutput("dq_header"))),
+                           tags$h1(tags$style("#dq_header{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           fluidRow(column(12, align = "center", textOutput("report_describe"))),
+                           br(),
+                           fluidRow(column(12, align = "center", downloadButton("report_download", "Generate Report")))
+                  ),
+
+                  tabPanel("Default Vis",
+                           fluidRow(column(12, align = "center", textOutput("default_head"))),
+                           tags$h1(tags$style("#default_head{color : purple; font-size : 20px}", align = "center")),
+                           br(),
+                           plotlyOutput("default_plot")
+                  )
+
+
+
+      ))
+  )
+}
+
+
+f_server_build <- function(def_table = t_definitions, final_table, joined_table){
+
+  ##--------------Shiny Server--------------------------------------------#
+  server <- function(input,output,session){
+
+    #--------------------------------- Sidepanels ------------------------------------------#
+    # Analysis Sidepanel
+    observeEvent(input$type,{
+      updateSelectInput(session,'variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$type])))
+    })
+
+    # Statistics sidepanel
+
+    observeEvent(input$statistics_type,{
+      updateSelectInput(session,'statistics_variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$statistics_type])))
+    })
+
+    #Outlier Sidepanel
+    observeEvent(input$type_outlier,{
+      updateSelectInput(session,'variable_outlier',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$type_outlier])))
+    })
+
+
+
+    #PSI Sidepanel
+    observeEvent(input$psi_type, {
+      updateSelectInput(session, 'psi_variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$psi_type])))
+    })
+
+    #Default Sidepanel
+    observeEvent(input$default_type, {
+      updateSelectInput(session, 'default_variable',
+                        choices=sort(unique(def_table$Name[def_table$Type == input$default_type])))
+    })
+    #-------------------------------------- Mains -----------------------------------------------#
+
+    ### Data Cleaning Tab ##
+    ## This will give the user the option to specify which company they want to remove based
+    ## on a missing % threshold
+    missing_req <- eventReactive(input$dq_button, {
+      input$dq_missing_req
+    })
+
+    companies_excluded <- reactive({
+      missing_comp <- final_table
+      missing_comp <- missing_comp %>%
+        group_by(symbol) %>%
+        summarise(missing = sum(is.na(value)),
+                  observations = n(),
+                  missing_pct = missing/observations)
+
+      if(!is.null(missing_req())){
+        excluded <- missing_comp$symbol[which(missing_comp$missing_pct >= missing_req())]
+      }else{
+        excluded <- NULL
+      }
+      excluded <- excluded
+    })
+
+
+    reshaped_master <- reactive({
+      missing_comp <- final_table
+
+      if(!is.null(missing_req())){
+        missing_comp <- final_table %>%
+          dplyr::filter(!(symbol %in% companies_excluded()))
+      }else{
+        missing_comp <- final_table
+      }
+      missing_comp <- missing_comp
+    })
+
+
+    df1_join_master <- reactive({
+      missing_comp <- joined_table
+
+      if(!is.null(missing_req())){
+        missing_comp <- joined_table %>%
+          dplyr::filter(!(symbol %in% companies_excluded()))
+      }else{
+        missing_comp <- joined_table
+      }
+      missing_comp <- missing_comp
+
+    })
+
+
+    df1_master <- reactive({
+      missing_comp <- df1_join_master()
+      missing_comp <- missing_comp[,c(1:(ncol(missing_comp) - 2))]
+
+      if(!is.null(missing_req())){
+        missing_comp <- missing_comp %>%
+          dplyr::filter(!(symbol %in% companies_excluded()))
+      }else{
+        missing_comp <- missing_comp
+      }
+      missing_comp <- missing_comp
+
+    })
+
+
+    output$company_missing_table <- DT::renderDataTable({
+
+      missing_comp <- reshaped_master()
+      missing_comp <- missing_comp %>%
+        group_by(symbol) %>%
+        summarise(missing = sum(is.na(value)),
+                  observations = n(),
+                  missing_pct = missing/observations)
+
+      missing_comp <- missing_comp
+
+      datatable(missing_comp, rownames = FALSE, class = 'cell-border stripe',filter = "top")
+
+    })
+
+
+
+    #----------------- Analysis main -------------#
+
+    #Make a reactive expression to make a graph of the metric over time
+    output$header <- reactive({
+
+      paste(gsub('[_]',' ',input$variable),"analysis")
+    })
+
+    output$Definition <- renderText({
+
+      paste("Definition")
+    })
+
+    define_table <- reactive({
+      t_definitons_filtered <- def_table
+      t_definitons_filtered <- subset(t_definitons_filtered, Name %in% input$variable)
+    })
+
+    output$definition <- renderText({
+
+      paste(define_table()[4])
+    })
+
+    output$ExpectedRiskDirection <- renderText({
+
+      paste("Expected Risk Direction")
+    })
+
+
+    output$riskdirection <- renderText({
+
+      paste(define_table()[5])
+    })
+
+    output$Formula <- renderText({
+
+      paste("Formula")
+    })
+
+    output$formula <- renderText({
+
+      paste(define_table()[3])
+    })
+
+
+    output$componenttable <- renderDataTable({
+
+
+      components <- data.frame(nrow = 7,ncol = 2)
+
+      for(i in 1:7){
+        if(!is.na(define_table()[5+i])){
+          components[i,1] <- define_table()[5+i]
+        }else{
+          components[i,1] <- NA
+        }
+      }
+
+      for(i in 1:7){
+        if(!is.na(define_table()[16+i])){
+          components[i,2] <- define_table()[16+i]
+        }else{
+          components[i,2] <- NA
+        }
+      }
+
+      components <- components[complete.cases(components[,1]),]
+
+      datatable(components,
+                colnames = c("Core Component","Core Component Definition"), rownames = FALSE,class = 'cell-border stripe')
+
+    })
+
+    output$subderivationtable <- renderDataTable({
+
+
+      components <- data.frame(nrow=3, ncol =1)
+
+      for(i in 1:3){
+        if(!is.na(define_table()[12+i])){
+          components[i,1] <- define_table()[12+i]
+        }else{
+          components[i,1] <- NA
+        }
+      }
+
+
+      components <- components[complete.cases(components[,1]),]
+
+      datatable(components,
+                colnames = c("Sub-Derivation", ""), rownames = FALSE, class = 'cell-border stripe')
+
+    })
+
+
+    output$FormulaFullFormat <- renderText({
+
+      paste("Formula (full format)")
+    })
+
+    output$fullformula <- renderText({
+
+      paste(define_table()[16])
+    })
+
+
+    t_variable_filtered <- reactive({
+      new_data <- reshaped_master()
+      new_data <- subset(new_data, variable %in% input$variable)
+      if(input$analysis_sector == "All") {
+        new_data <- new_data
+      }
+      else {
+        new_data <- subset(new_data, sector %in% input$analysis_sector)
+      }
+    })
+
+    output$financeplot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d")
+
+      t_plot <- t_variable_filtered()
+      t_plot <- t_plot %>%
+        group_by(date) %>%
+        summarise(perc_..05 = quantile(value, probs = c(.05), na.rm = TRUE),
+                  perc_.25 = quantile(value, probs = c(.25), na.rm = TRUE),
+                  perc_.5 = quantile(value, probs = c(0.5),na.rm = TRUE),
+                  perc_.75 = quantile(value, probs = c(.75), na.rm = TRUE),
+                  perc_.95 = quantile(value, probs = c(.95), na.rm = TRUE))
+
+      t_plot <- melt(t_plot, id.vars = "date")
+
+      ggplot(data = t_plot, aes(x = date, y = value, group = variable, color = variable))+
+        geom_line()+
+        geom_point() +
+        ggtitle(paste("Percentile movements of", input$variable, "for", input$analysis_sector)) +
+        xlab("Year")+
+        ylab("Value")+
+        scale_x_date(breaks = v_dates, date_labels = "%Y")+
+        theme(panel.background = element_rect(fill="white",
+                                              size = 2, linetype = "solid"),
+              plot.title = element_text(face = "bold.italic",hjust = 0.5),
+              axis.title.x = element_text(face = "bold.italic"),
+              axis.title.y = element_text(face = "bold.italic"),
+              plot.background = element_rect(fill = "white"),
+              panel.grid.major.y = element_line(color="grey"),
+              panel.grid.minor.y = element_line(color="grey"),
+              panel.border=element_rect(colour="black",fill=NA,size=1))
+    })
+    #-------------Company and Sector Analysis----------------#
+
+    stats_df <- reactive({
+      t_filtered <- reshaped_master()
+      t_filtered <- subset(t_filtered, variable %in% input$statistics_variable)
+      if(input$statistics_sector == "All"){
+        t_filtered <- t_filtered
+      }else{
+        t_filtered <- subset(t_filtered, sector %in% input$statistics_sector)
+      }
+      t_filtered <- t_filtered
+      t_filtered <- t_filtered %>%
+        group_by(symbol) %>%
+        summarise(Minimum = #ifelse(is.na(
+                    round(min(value, na.rm = TRUE), digits = 2), #), paste(as.character("No data available")), min(value, na.rm = TRUE)),
+                  Average = round((sum(as.numeric(value),na.rm = TRUE) / length(as.numeric(value))), digits = 2),
+                  Maximum = #ifelse(is.na(
+                    round(max(value, na.rm = TRUE), digits = 2), #, paste(as.character("No data available")), max(value, na.rm = TRUE)),
+                  Missing_Count = sum(is.na(value)),
+                  Missing_percent = (sum(is.na(value)) / length(value)) , Number_of_observations = length(value))
+    })
+
+    output$tablehead <- reactive({
+
+      paste(gsub('[_]',' ',input$statistics_variable),"analysis for", gsub('[_]', ' ', input$statistics_sector))
+    })
+
+    stats_sector_df <- reactive({
+      stats_sector <- reshaped_master()
+      stats_sector <- subset(stats_sector, variable %in% input$statistics_variable)
+      if(input$statistics_sector == "All"){
+        stats_sector <- stats_sector
+      }else{
+        stats_sector <- subset(stats_sector, sector %in% input$statistics_sector)
+      }
+      stats_sector <- stats_sector %>%
+        summarise(Minimum = min(value, na.rm = TRUE), Average = (sum(as.numeric(value),na.rm=TRUE) / length(as.numeric(value))), Maximum = max(value, na.rm = TRUE),
+                  Missing_count = sum(is.na(value)), Missing_percent = round((sum(is.na(value)) / (sum(is.na(value)) + sum(!is.na(value)))),2),
+                  Number_of_observations = length(value))
+    })
+
+    output$stats <- renderDataTable({
+
+
+      t_stats<- stats_sector_df()
+      t_stats[,c(1:3)]<- round(t_stats[,c(1:3)],2) %>%
+        format( big.mark = ",",scientific = FALSE)
+      datatable(t_stats,options = list(dom = "fti"),rownames = FALSE,class = 'cell-border stripe')
+    })
+
+    output$stats_comphead <- renderText({
+
+      paste("Company Breakdown")
+    })
+
+    output$stats_comp <- renderDataTable({
+
+      average_fct <- stats_sector_df()
+
+      t_comp <- stats_df()
+      t_comp_1 <- t_comp[,c(2:7)]
+      t_comp_1 <- as.data.frame(t_comp_1)
+      t_comp_1 <- t_comp_1
+      t_comp_2 <- t_comp[,1]
+      t_comp <- cbind(t_comp_2,t_comp_1)
+      datatable(t_comp,rownames = FALSE,class = 'cell-border stripe')%>%
+        formatStyle(
+          'Average',
+          color = styleInterval(c(average_fct$Average), c('red','green')))
+    })
+
+    #-----------Outlier Analysis-----------------#
+
+    output$outlierhead <- renderText({
+
+      paste("Outlier anlaysis for", gsub('[_]', ' ', input$variable_outlier))
+    })
+
+    outlier_plot_table <- reactive({
+      outlier_df <- reshaped_master() %>%
+        filter(date %in% c(as.Date(paste(input$year_outlier[1],"12-31",sep="-")):as.Date(paste(input$year_outlier[2],"12-31",sep="-")))) %>%
+        filter(variable %in% input$variable_outlier)
+      if(input$outlier_sector == "All") {
+        outlier_df <- outlier_df
+      }
+      else {
+        outlier_df <- outlier_df %>%
+          filter(sector %in% input$outlier_sector)
+      }
+      outlier_df <- outlier_df
+    })
+
+    output$outlier_plot <- renderPlot({
+
+      t_outlier <- outlier_plot_table()
+      t_outlier <- t_outlier %>%
+        plot_outlier(value, col = "#663399")
+    })
+
+    output$outlier_tablehead <- renderText({
+
+      paste("Outlier breakdown for", gsub("[_]", " ", input$variable_outlier))
+    })
+
+    outlier_df <- reactive({
+      outlier_loaded <- reshaped_master()
+      outlier_loaded <- outlier_loaded %>% filter(variable %in% input$variable_outlier)
+      if(input$outlier_sector == "All") {
+        outlier_loaded <- outlier_loaded
+      }
+      else {
+        outlier_loaded <- outlier_loaded %>% filter(sector %in% input$outlier_sector)
+      }
+      outlier_loaded <- outlier_loaded %>%
+        filter(date %in% c(as.Date(paste(input$year_outlier[1],"12-31",sep="-")):as.Date(paste(input$year_outlier[2],"12-31",sep="-"))))
+      outlier_vector <- outliers(outlier_loaded)
+      outlier_dataframe <- data.frame(outlier_vector)
+      outlier_full <- inner_join(outlier_loaded, outlier_dataframe, by = "value")
+      outlier_final <- outlier_full[, c(1, 5)]
+    })
+
+    output$outlier_table <- renderDataTable({
+
+      datatable(outlier_df(),rownames = FALSE,class = 'cell-border stripe')
+    })
+
+    output$outlier_report <- downloadHandler(
+
+
+      filename = "report1.html",
+
+      content = function(file) {
+
+        tempReport <- file.path(tempdir(), "report1.Rmd")
+        file.copy("report1.Rmd", tempReport, overwrite = TRUE)
+        params <- list(data1 = outlier_plot_table(),
+                       data2 = outlier_df())
+
+        rmarkdown::render(tempReport, output_file = file, params = params, envir = new.env(parent = globalenv()))
+
+      }
+    )
+
+
+
+    #----------- Visualisation main -------------#
+
+    data_frame <- reactive({
+
+      data <- df1_master()
+      data_join <- df1_join_master()
+
+      if(input$visualisation_sector == "All"){
+        data_f <- data[,-c(1,2)]
+        if(input$Visualisation_type == "All"){
+          data_f <- data_f
+        }
+        else {
+          tester <- reshaped_master() %>%
+            filter(Type %in% input$Visualisation_type)
+          names_keep <- sort(unique(tester$variable))
+          data_f <- data_f[, names_keep]
+        }
+      }
+      else {
+        data_f <- data_join[data_join$sector == input$visualisation_sector , 1:(length(data_join)-2)]
+        if(input$Visualisation_type == "All") {
+          data_f <- data_f[, -c(1,2)]
+        }
+        else {
+          tester <- reshaped_master() %>%
+            filter(Type %in% input$Visualisation_type)
+          names_keep <- sort(unique(tester$variable))
+          data_f <- data_f[, names_keep]
+        }
+      }
+      data_f <- data_f
+    })
+
+    output$corrhead <- renderText({
+
+      paste("Correlation Matrix")
+    })
+
+    output$corr <- renderPlotly({
+
+      t_data <- vis_cor(data_frame())
+      ggplotly(t_data, height = 800) %>%
+        layout(autosize=TRUE)
+    })
+
+    observe({
+      if(length(colnames(data_frame())) < 2) {
+        shinyjs::hide("corr")
+      }
+      else{
+        shinyjs::show("corr")
+      }
+    })
+
+    output$corr_error <- renderText({
+
+      paste("Unable to correlate, as only one ratio is included in this subset")
+    })
+
+    observe({
+      if(length(colnames(data_frame())) >= 2) {
+        shinyjs::hide("corr_error")
+      }
+      else{
+        shinyjs::show("corr_error")
+      }
+    })
+
+
+    #-------------- Overview & Missing main -----------------#
+
+
+    output$table_statshead <- renderText({
+
+      paste("Overall Statistical Analysis")
+    })
+
+    overview_df <- reactive({
+      over_view_df <- f_statistical_overview(input$overview_years[1],input$overview_years[2],df1_master())
+    })
+
+
+
+    output$table_stats <- DT::renderDataTable({
+
+      overview_datatable <- overview_df()
+      datatable(overview_datatable,rownames = FALSE,class = 'cell-border stripe')
+    })
+    output$missing_head <- renderText({
+
+      paste("Missing Analysis")
+    })
+
+    missing_df <- reactive({
+      loaded_date <- df1_master()
+      loaded_date <- loaded_date %>%
+        filter(date %in% c(as.Date(paste(input$overview_years[1], "12-31", sep = "-")) : as.Date(paste(input$overview_years[2], "12-31", sep = "-"))))
+    })
+
+    output$missing_plot <- renderPlotly({
+
+      gg_miss_var(missing_df()[, -c(1, 2)],show_pct = TRUE)})
+
+    output$overview_report <- downloadHandler(
+
+      filename = "report_overview.html",
+
+      content = function(file) {
+
+        tempReport <- file.path(tempdir(), "report_overview.Rmd")
+        file.copy("report_overview.Rmd", tempReport, overwrite = TRUE)
+        params <- list(data1 = overview_df(),
+                       data2 = missing_df())
+
+        rmarkdown::render(tempReport, output_file = file, params = params, envir = new.env(parent = globalenv()))
+
+      }
+    )
+
+
+    #---------------------Company Breakdown--------------------------------#
+    observeEvent(input$company_sector,{
+      if (input$company_sector == "All") {
+        updateSelectInput(session,'company_symbol', choices=sort(unique(df1_join_master()[,"symbol"])))
+      }
+      else {
+        updateSelectInput(session,'company_symbol', choices=sort(unique(df1_join_master()[,"symbol"][df1_join_master()[,"sector"]==input$company_sector])))
+      }
+    })
+
+    observeEvent(input$company_type,{
+      updateSelectInput(session,'company_variable',
+                        choices=sort(unique(def_table$Name[def_table$Type==input$company_type])))
+    })
+
+    output$companyhead <- renderText({
+
+      paste(gsub("[_]", " ", input$company_variable), "Analysis for", gsub("[_]", " ", input$company_symbol))
+    })
+
+    output$company_info <- renderText({
+
+      URL <- paste("https://www.marketwatch.com/investing/stock/",gsub(" US EQUITY","",input$company_symbol),"/historical?siteid=mktw&date=&x=22&y=7",sep="")
+
+      share_price <- URL %>%
+        read_html() %>%
+        html_nodes(".bgLast") %>%
+        html_text()
+
+      paste("Company Share Price",share_price[2],sep="    ")
+    })
+
+    output$company_table <- renderDataTable({
+
+      URL <- paste("https://www.marketwatch.com/investing/stock/",gsub(" US EQUITY","",input$company_symbol),sep="")
+
+      desc <- URL %>%
+        read_html() %>%
+        html_nodes(".kv__label") %>%
+        html_text()
+
+      value <- URL %>%
+        read_html() %>%
+        html_nodes(".kv__primary") %>%
+        html_text()
+
+      table <- data.frame(matrix(ncol = 2,nrow=16))
+
+      desc[1]
+      value[1]
+
+      for(i in 1:16){
+        table[i,1] <- desc[i]
+        table[i,2] <- value[i]
+      }
+
+      colnames(table) <- c("Metric","value")
+
+      datatable(table, rownames = FALSE,class = 'cell-border stripe')
+    })
+
+
+    company_df <- reactive({
+      t_company <- reshaped_master()
+      if (input$company_sector == "All") {
+        t_company <- t_company
+      }
+      else {
+        t_company <- t_company %>%
+          filter(sector %in% input$company_sector)
+      }
+      t_company <- t_company %>%
+        filter(symbol %in% input$company_symbol) %>%
+        filter(Type %in% input$company_type) %>%
+        filter(variable %in% input$company_variable)
+
+      t_company <- na.omit(t_company, cols = "value")
+    })
+
+    output$company_error <- renderText({
+
+      t_company <- company_df()
+      if(all(is.na(t_company$value))) {
+        paste("No data available")
+      }
+    })
+
+    output$company_plothead <- renderText({
+
+      paste(gsub("[_]", " ", input$company_variable), "Chart for", gsub("[_]", " ", input$company_symbol))
+    })
+
+    output$company_plot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d")
+
+      company_plot_data <- company_df()
+
+      ggplot(data = company_plot_data, aes(x= date, y = value)) +
+        geom_line(color = "purple") +
+        geom_point() +
+        scale_x_date(breaks = v_dates, date_labels = "%Y")
+    })
+
+    t_just_value <- reactive({
+      t_value_loaded <- company_df()
+      t_value_loaded <- t_value_loaded$value
+    })
+
+    observe({
+      if(all(is.na(t_just_value()))){
+        shinyjs::hide("company_plot")
+      }
+      else{
+        shinyjs::show("company_plot")
+      }
+    })
+
+
+    #--------------------Population Stability Index---------------------------#
+    output$percentile_tablehead <- renderText({
+
+      paste("Percentile Distribution for", gsub("[_]", " ", input$psi_variable))
+    })
+
+
+    percentages_quantiles_table <- reactive({
+      if(input$psi_calculation == "Base"){
+        percentage_table <- f_base_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"percentages")
+      }else{
+        percentage_table <- f_rolling_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"percentages")
+      }
+
+      percentage_table[,(2:ncol(percentage_table))] <- round(percentage_table[,(2:ncol(percentage_table))],2)
+      percentage_table <- percentage_table
+    })
+
+    output$percentile_table <- renderDataTable({
+
+      datatable(percentages_quantiles_table(), options = list(scrollx = TRUE),class = 'cell-border stripe',rownames = FALSE)
+    })
+
+
+    percentages_decile_table <- reactive({
+      if(input$psi_calculation == "Base"){
+        percentage_table <- f_base_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"values")
+      }else{
+        percentage_table <- f_rolling_psi(reshaped_master(),input$psi_type,input$psi_variable,input$psi_start,input$psi_sector,"values")
+      }
+
+      # percentage_table <- as.data.frame(percentage_table)
+      #percentage_table <- round(percentage_table,2)
+
+    })
+
+    output$psi_tablehead <- renderText({
+
+      paste("Percentile Distribution for", gsub("[_]", " ", input$psi_variable))
+    })
+
+    output$psi_table <- renderDataTable({
+
+      datatable(percentages_decile_table(),options = list(scrollX = TRUE),class = 'cell-border stripe',rownames = FALSE) %>%
+        formatStyle(
+          'PSI',
+          color = styleInterval(c(0.1,0.25), c('green','orange','red')))
+    })
+
+    output$factor_plothead <- renderText({
+
+      paste("% Tile Distribution across Time for", gsub("[_]", " ", input$psi_variable))
+    })
+
+    output$factor_plot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d")
+
+      decile_frame <- percentages_quantiles_table()
+      decile_clean <- melt(decile_frame, id.vars = "date")
+      ggplot(decile_clean, aes(x = date, y = value, group = variable, colour = variable)) +
+        geom_line() +
+        geom_point() +
+        xlab("Year") +
+        ylab("Value") +
+        scale_x_date(breaks = v_dates[(year(decile_clean[1,1])-year(v_dates[1])):length(v_dates)], date_labels = "%Y")
+    })
+
+    output$stability_plothead <- renderText({
+
+      paste("Stability of", gsub("[_]", " ", input$psi_variable), "Distribution")
+    })
+
+    output$stability_plot <- renderPlotly({
+
+      v_dates <- reshaped_master()
+      v_dates <- as.Date(sort(unique(v_dates$date)),"%Y-%m-%d")
+
+      plot_psi <- percentages_decile_table()
+
+      ggplot(plot_psi, aes(x = date, y = PSI)) +
+        geom_point() +
+        geom_line(col = "purple") +
+        xlab("Year") +
+        ylab("Value")+
+        scale_x_date(breaks = v_dates[(year(plot_psi[1,1])-year(v_dates[1])+1):length(v_dates)], date_labels = "%Y")
+    })
+
+
+    ##################################################################################
+    #-----------------------------Macro----------------------------------------------#
+    #-----------------------------ECB Interest Rates---------------------------------#
+
+    URL_ECB_IR <- "https://www.centralbank.ie/statistics/interest-rates-exchange-rates/ecb-interest-rates"
+
+    central_bank <- URL_ECB_IR %>%
+      read_html() %>%
+      html_nodes("td") %>%
+      html_text()
+
+    ECB_interest_rate_table <- data.frame(matrix(ncol = 5, nrow = (length(central_bank) / 5)))
+
+    for(j in 1:5) {
+      ECB_interest_rate_table[,j] <- central_bank[seq(j, length(central_bank), by = 5)]
+    }
+
+    colnames(ECB_interest_rate_table) <- c("Title", "Deposit Facility", "Fixed Rate Tender", "Marginal Lending", "Date")
+
+    ECB_interest_rate_table$Date <- as.Date(ECB_interest_rate_table$Date, "%d/%m/%Y")
+    ECB_interest_rate_table$`Deposit Facility` <- as.numeric(ECB_interest_rate_table$`Deposit Facility`)
+
+    ECB_interest_rate_table <- ECB_interest_rate_table[, c("Date", "Deposit Facility", "Fixed Rate Tender", "Marginal Lending")]
+    #------------------------------------------------------------------------------------------#
+
+    #--------------------------ECB Inflation---------------------------------------------------#
+
+    URL_ECB_INFL <- "https://www.rateinflation.com/inflation-rate/euro-area-historical-inflation-rate.php?start-year=2004&end-year=2020"
+
+    inflation <- URL_ECB_INFL %>%
+      read_html() %>%
+      html_nodes("td") %>%
+      html_text()
+
+    ECB_inflation_table <- data.frame(matrix(ncol = 14, nrow = (length(inflation) / 14)))
+
+    for(j in 1:14) {
+      ECB_inflation_table[,j] <- inflation[seq(j, length(inflation), by = 14)]
+    }
+
+    colnames(ECB_inflation_table) <- c("Date", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "ann")
+
+    for(i in 1:nrow(ECB_inflation_table)){
+      for(j in 1:ncol(ECB_inflation_table)){
+        if(nchar(ECB_inflation_table[i,j]) < 2){
+          ECB_inflation_table[i,j] <- gsub("", NA, ECB_inflation_table[i,j])
+        }
+        else {
+          ECB_inflation_table[i,j] <- ECB_inflation_table[i,j]
+        }
+      }
+    }
+
+    ECB_inflation_table$Date <- as.Date(ECB_inflation_table$Date, "%Y")
+
+    ECB_inflation_table[,-1] <- sapply(ECB_inflation_table[,-1], function(x) as.numeric(gsub("%", "", x)))
+
+    ECB_inflation_table <- ECB_inflation_table[, c("Date", "ann", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")]
+
+    ################################################################################################
+
+    #    INFLATION RATE       #
+
+    URL_inflation_US <- "https://www.usinflationcalculator.com/inflation/current-inflation-rates/"
+
+    us_inflation <- URL_inflation_US %>%
+      read_html() %>%
+      html_nodes("td") %>%
+      html_text()
+
+    year_list_uinf <- URL_inflation_US %>%
+      read_html() %>%
+      html_nodes("strong") %>%
+      html_text()
+
+    year_list_uinf <- as.numeric(year_list_uinf)
+
+    year_list_uinf <- na.rm(year_list_uinf)
+
+    US_inflation_table <- data.frame(matrix(nrow = length(year_list_uinf),ncol = 14))
+
+    inflation_names <- us_inflation[c(1:14)]
+
+    us_inflation <- us_inflation[-c(1:14)]
+
+    us_inflation <- us_inflation[c(1:(length(year_list_uinf)*14))]
+
+    for(i in 1:14){
+      US_inflation_table[,i] <- us_inflation[seq(from = i, to = length(us_inflation), by = 14)]
+    }
+
+    colnames(US_inflation_table) <- c("Date", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "ave")
+
+    US_inflation_table[,1] <- as.Date(US_inflation_table[,1],"%Y")
+
+    US_inflation_table <- US_inflation_table[, c("Date", "ave", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")]
+
+    for(i in 1:nrow(US_inflation_table)){
+      for(j in 1:ncol(US_inflation_table)){
+        if(nchar(US_inflation_table[i,j]) < 2){
+          US_inflation_table[i,j] <- gsub("", NA, US_inflation_table[i,j])
+        }
+        else {
+          US_inflation_table[i,j] <- US_inflation_table[i,j]
+        }
+      }
+    }
+
+    US_inflation_table[,-1] <- sapply(US_inflation_table[,-1], as.numeric)
+
+    #   INTEREST RATE   #
+
+    URL_interest_rate <- "https://www.macrotrends.net/2015/fed-funds-rate-historical-chart"
+
+    US_interest <- URL_interest_rate %>%
+      read_html() %>%
+      html_nodes("td") %>%
+      html_text()
+
+    years_unin <- na.rm(as.numeric(US_interest))
+
+
+    years_unin_c <- 0
+    for(i in 1:length(years_unin)){
+      if(years_unin[i]>=2000){
+        years_unin_c <- years_unin_c + 1
+      }
+    }
+
+    US_interest_rate_table <- data.frame(matrix(nrow = years_unin_c,ncol = 7))
+
+    for(i in 1:7){
+      US_interest_rate_table[,i] <- US_interest[seq(from = i, to = (years_unin_c-1) * 7 + i, by = 7)]
+    }
+
+    colnames(US_interest_rate_table) <- c("Date","Average","Year Open","Year High","Year Low","Year Close","Annual % Change")
+
+    US_interest_rate_table[,c(2:7)] <- sapply(US_interest_rate_table[,c(2:7)], function(x) as.numeric(gsub("%","",x)))
+
+    US_interest_rate_table[,1] <- as.Date(US_interest_rate_table[,1],"%Y")
+
+    ###############################################################################
+
+    output$macro_tablehead <- renderText({
+
+      paste(input$macro_area, input$macro_type, "History")
+    })
+
+    output$macro_table <- renderDataTable({
+
+      datatable(get(paste(input$macro_area, input$macro_type, "table", sep = "_")), rownames = FALSE, class = 'cell-border stripe')
+    })
+
+    output$macro_plothead <- renderText({
+
+      paste(input$macro_area, input$macro_type, "History")
+    })
+
+    output$macro_plot <- renderPlotly({
+
+
+      t_macro <- get(paste(input$macro_area, input$macro_type, "table", sep = "_"))
+
+      ggplot(t_macro, aes(x = Date, y = t_macro[, 2])) +
+        geom_line(color = "purple") +
+        geom_point() +
+        ylab(paste(input$macro_type))
+    })
+
+
+    ##################################################################################
+    #-----------------------------DQ-------------------------------------------------#
+
+    output$dq_header <- renderText({
+
+      paste("Data Quality Report")
+    })
+
+    output$report_describe <- renderText({
+
+
+    })
+
+    ## Reactive dataframe for the prupose of a data quality report
+    report_df <- reactive({
+
+      symbols_date <- df1_join_master()[,c(1,2)]      #Extracts the dates and symbols from full dataset
+      sectors <- as.data.frame(df1_join_master()[,46]) #Extracts the company sectors
+      colnames(sectors) <- "sector"
+
+
+      if(input$dq_type == "All Ratios") {
+        report_final <- df1_join_master()[,-47] ##Will keep dataset whole
+        if(input$dq_sector == "All"){
+          report_final <- report_final ##Will keep dataset whole
+        }
+        else {
+          report_final <- report_final %>%
+            filter(sector %in% input$dq_sector) ##Filters whole data by sector if specified
+        }
+      }
+
+      else {
+        index <- as.data.frame(unique(reshaped_master()[,c(4,6)])) ##Gathers unique ratio names and types of ratios
+
+        index_futher <- index %>%
+          filter(Type %in% input$dq_type) ##User inputs a ratio type
+
+        v_index <- c(index_futher[,1])  ## The ratios that correpsond to type chosen will be used to index the full dataframe
+
+        filtered <- as.data.frame(df1_join_master()[,v_index])
+        colnames(filtered) <- v_index
+        report_final <- cbind(symbols_date, sectors, filtered)
+        report_final <- report_final
+
+        if(input$dq_sector == "All"){
+          report_final <- report_final    ##No filter for sector
+        }
+        else {
+          report_final <- report_final %>%
+            filter(sector %in% input$dq_sector)    ## Filtered for sector
+        }
+      }
+
+      report_final <- report_final
+
+    })
+
+    ## Allows user to download a dq report based on their choice of type of ratio and sector they want to look at
+    output$report_download <- downloadHandler(
+
+      filename = "data_quality_report.html",
+
+      content = function(file) {
+        report_df_final <- report_df()
+        report_df_final <- report_df_final %>%
+          diagnose_report(output_format = "html", output_file = "data_quality_report.html") ## Produces full data quality report
+      }
+    )
+
+    ## DEFAULT TAB ##
+
+    default_df <- reactive({
+      default_test <- joined_adw
+      if(input$default_sector == "All"){
+        default_test <- default_test
+      }
+      else {
+        default_test <- default_test[default_test$sector == input$default_sector, ]
+      }
+      default_test <- default_test
+    })
+
+    output$default_head <- renderText({
+      paste(gsub("[_]", " ", input$default_variable), "vs BB_1YR_DEFAULT_PROB")
+    })
+
+    output$default_plot <- renderPlotly({
+      default_test2 <- default_df()
+      ggplot(default_test2, aes(x = default_test2[,which( colnames(default_test2) == input$default_variable)], y = default_test2$year_dr)) +
+        geom_point() +
+        xlab(input$default_variable) +
+        ylab("Bloomberg Probability of Default")
+    })
+
+
+
+
+
+  }
+}

@@ -1,0 +1,26 @@
+{
+    "id": "C7D0406E",
+    "path": "//fs02/RAS/Quantitative Risk/dev-tools/modules/financial-tool/packages/GTquantrisk_package/R/package_script_gtqr.R",
+    "project_path": "R/package_script_gtqr.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1663939767241.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "1253,7",
+        "scrollLine": "1244"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1663946436,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1663946437026,
+    "read_only": false,
+    "read_only_alternatives": []
+}

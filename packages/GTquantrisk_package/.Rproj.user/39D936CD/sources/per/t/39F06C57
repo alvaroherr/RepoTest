@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1579782586033.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "15|56|38|0|\n44|49|65|0|\n73|51|87|0|\n93|56|98|0|\n106|34|127|0|\n134|27|136|0|\n153|34|160|0|\n163|32|165|0|\n172|31|175|0|\n180|52|183|0|\n188|59|200|0|\n208|31|358|0|\n362|53|374|0|\n384|53|401|0|\n405|35|409|0|\n413|77|510|0|\n516|82|641|0|\n644|54|1041|0|\n1044|81|2063|0|\n1047|43|2062|2|\n",
+    "hash" : "1946167720",
+    "id" : "39F06C57",
+    "lastKnownWriteTime" : 1580203775,
+    "last_content_update" : 1580203775875,
+    "path" : "~/test/R/hello.R",
+    "project_path" : "R/hello.R",
+    "properties" : {
+        "cursorPosition" : "1044,0",
+        "scrollLine" : "203"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

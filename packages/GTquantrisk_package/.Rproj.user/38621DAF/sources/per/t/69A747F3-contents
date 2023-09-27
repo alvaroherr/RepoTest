@@ -1,0 +1,98 @@
+
+#####SWAP VALUATION#######
+
+#Exponential smoothing prediction
+install.packages("lubridate")
+install.packages("forecast")
+
+# Load libraries
+library(readxl)
+library(forecast)
+library(lubridate)
+# Load the historical data
+data <- read_excel("/Users/aherraez/Downloads/Swaps 2022/Briongloid/Project interests/AUD - RBACTRD.xlsx", skip = 4)
+
+# Convert the data to a time series object
+ts_data <- ts(data$PX_LAST, frequency = 252, start = c(year(data$Date[1]), month(data$Date[1])))
+
+# Fit the curve using exponential smoothing
+fit <- ets(ts_data)
+
+# Check the model diagnostics
+summary(fit)
+
+
+# Plot the fitted curve and the original data
+plot(fit)
+title(main = "Exponential smoothing curve fit")
+lines(ts_data, col = "blue")
+
+# Project future rates using the fitted curve
+future_rates <- forecast(fit, h = 252) # project the next 252 periods (i.e., 1 year)
+
+# Plot the projected future rates
+plot(future_rates, main = "Projected future rates using exponential smoothing")
+
+
+
+#ARIMA
+# Load the necessary libraries
+library(readxl)
+library(forecast)
+
+# Load the historical data
+data2 <- read_excel("/Users/aherraez/Downloads/Swaps 2022/Briongloid/Project interests/AUD - RBACTRD.xlsx", skip = 4)
+
+# Convert the data to a time series object
+ts_data <- ts(data$PX_LAST, frequency = 252, start = c(year(data$Date[1]), month(data$Date[1])))
+
+# Specify the ARIMA(p, d, q) parameters
+p <- 1 # number of autoregressive terms
+d <- 1 # degree of differencing
+q <- 1 # number of moving average terms
+
+# Fit the ARIMA model
+fit <- arima(ts_data, order = c(p, d, q))
+
+# Check the model diagnostics
+summary(fit)
+
+# Plot the fitted curve and the original data
+plot(fit$residuals, main = "ARIMA curve fit")
+lines(ts_data, col = "blue")
+
+# Project future rates using the fitted curve
+future_rates <- forecast(fit, h = 252) # project the next 252 periods (i.e., 1 year)
+
+# Plot the projected future rates
+plot(future_rates, main = "Projected future rates using ARIMA")
+
+#######################################################################
+
+#### HW1F
+
+install.packages("YieldCurve")
+install.packages("RQuantLib")
+
+library(RQuantLib)
+library(YieldCurve)
+library(quantmod)
+
+# Load data
+data3 <- read_excel("/Users/aherraez/Downloads/Swaps 2022/Briongloid/Project interests/AUD - RBACTRD.xlsx", skip = 4)
+
+# Convert  to time series
+ts_data <- ts(data$PX_LAST, frequency = 252, start = c(year(data$Date[1]), month(data$Date[1])))
+
+# Estimate HW1F parameters
+hw1f_fit <- hw1f(ts_data)
+
+# Project future rates using the HW1F model
+hw1f_proj <- predict(hw1f_fit, n.ahead = 252, bootstrap = TRUE)
+
+# Plot rates
+plot(hw1f_proj, main = "Projected Rates using HW1F Model")
+
+
+
+
